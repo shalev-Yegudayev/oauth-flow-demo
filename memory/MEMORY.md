@@ -1,0 +1,1 @@
+- [Vorlon Home Assignment](project-vorlon-assignment.md) — OAuth microservice home assignment: provider-agnostic OAuth + GitHub + mock internal service, phased workflow (analysis → backend plan → frontend plan).
