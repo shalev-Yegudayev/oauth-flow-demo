@@ -1,5 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import redis.asyncio as aioredis
+
 from app.models.session import SessionRecord, StateRecord, UserProfileRecord
 
 _STATE_PREFIX = "oauth:state:"
@@ -63,7 +65,7 @@ class SessionStore:
             return None
         record = SessionRecord.model_validate_json(raw.decode("utf-8"))
         # Hard ceiling: reject sessions older than 12 h regardless of sliding TTL.
-        if datetime.now(timezone.utc) - record.created_at > _12_HOURS:
+        if datetime.now(UTC) - record.created_at > _12_HOURS:
             await self.delete_session(session_id)
             return None
         # Sliding TTL: each access resets the expiry so active sessions stay alive.

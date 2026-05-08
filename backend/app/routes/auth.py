@@ -1,7 +1,7 @@
 import base64
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
@@ -18,8 +18,8 @@ from app.core.security import (
     set_session_cookie,
 )
 from app.models.session import SessionRecord, StateRecord
-from app.providers.base import OAuthProvider
 from app.providers import get_provider
+from app.providers.base import OAuthProvider
 from app.services.session_store import SessionStore
 from config import Settings
 from deps import (
@@ -60,7 +60,7 @@ async def start_oauth(
         StateRecord(
             provider=provider,
             code_verifier=verifier,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         ),
     )
     return RedirectResponse(
@@ -116,7 +116,7 @@ async def oauth_callback(
         ),
         token_expires_at=token.expires_at,
         scope=token.scope,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         last_refreshed_at=None,
     )
     await store.create_session(session)

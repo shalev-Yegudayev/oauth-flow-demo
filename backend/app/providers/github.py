@@ -1,13 +1,11 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
-import httpx
 from pydantic import BaseModel
 
 from app.core.exceptions import ProviderError, TokenRefreshError
 from app.providers.base import AccessToken, OAuthProvider
-from config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +21,6 @@ class Repo(BaseModel):
 class GithubProvider(OAuthProvider):
     name = "github"
     required_scopes = ["public_repo", "read:user"]
-
-    def __init__(self, http: httpx.AsyncClient, settings: Settings) -> None:
-        self._http = http
-        self._settings = settings
 
     def authorization_url(self, state: str, code_challenge: str) -> str:
         params = urlencode(
@@ -143,7 +137,7 @@ class GithubProvider(OAuthProvider):
     def _parse_token_response(payload: dict) -> AccessToken:
         expires_at: datetime | None = None
         if "expires_in" in payload:
-            expires_at = datetime.now(timezone.utc) + timedelta(
+            expires_at = datetime.now(UTC) + timedelta(
                 seconds=int(payload["expires_in"])
             )
         return AccessToken(

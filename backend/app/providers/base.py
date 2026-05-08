@@ -2,7 +2,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import ClassVar, Generic, TypeVar
 
+import httpx
 from pydantic import BaseModel
+
+from config import Settings
 
 T = TypeVar("T")
 
@@ -28,6 +31,10 @@ class OAuthProvider(ABC, Generic[T]):
 
     required_scopes: ClassVar[list[str]]
     """Minimum scopes to request — list only what the implementation strictly needs."""
+
+    def __init__(self, http: httpx.AsyncClient, settings: Settings) -> None:
+        self._http = http
+        self._settings = settings
 
     @abstractmethod
     def authorization_url(self, state: str, code_challenge: str) -> str:

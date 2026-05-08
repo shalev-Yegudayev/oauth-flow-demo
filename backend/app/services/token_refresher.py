@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as aioredis
 from fastapi import HTTPException
@@ -36,7 +36,7 @@ class TokenRefresher:
         if record.token_expires_at is None:
             return record
         # Token still has enough runway — skip refresh until inside the window.
-        if record.token_expires_at - datetime.now(timezone.utc) > _REFRESH_WINDOW:
+        if record.token_expires_at - datetime.now(UTC) > _REFRESH_WINDOW:
             return record
         # Token is expiring but no refresh token was issued; session is unrecoverable.
         if record.encrypted_refresh_token is None:
@@ -66,7 +66,7 @@ class TokenRefresher:
                 self._provider.refresh_token(plaintext_refresh),
                 timeout=8.0,
             )
-        except (asyncio.TimeoutError, Exception) as exc:
+        except (TimeoutError, Exception) as exc:
             await self._store.delete_session(record.session_id)
             raise TokenRefreshError("refresh_failed") from exc
 
@@ -79,7 +79,7 @@ class TokenRefresher:
                     else None
                 ),
                 "token_expires_at": new_token.expires_at,
-                "last_refreshed_at": datetime.now(timezone.utc),
+                "last_refreshed_at": datetime.now(UTC),
             }
         )
         await self._store.update_session(updated)
