@@ -4,38 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OAuth flow demo with a **Next.js 16 frontend** and a **FastAPI backend**. The backend has only a `requirements.txt` and virtualenv — no source files exist yet.
+OAuth flow demo (Vorlon home assignment) — a provider-agnostic OAuth microservice that authenticates a user, fetches third-party data (GitHub first), enriches it with a mock internal service, and returns a normalized profile.
 
-## Architecture
+| Layer | Stack | Dev URL |
+|---|---|---|
+| Frontend | React 19 + Vite 8 (JSX) | `http://localhost:5173` |
+| Backend | Python + FastAPI + Pydantic v2 | `http://localhost:8000` |
+| Session store | Redis 7 | `localhost:6379` |
 
-```
-oauth-flow-demo/
-├── frontend/   # Next.js 16.2.5 + React 19 + Tailwind CSS v4, TypeScript
-└── backend/    # FastAPI + Pydantic v2 (venv exists, no source files yet)
-```
+Each sub-project has its own `CLAUDE.md` with full detail:
+- [backend/CLAUDE.md](backend/CLAUDE.md)
+- [frontend/CLAUDE.md](frontend/CLAUDE.md)
 
-Both Next.js 16 and Tailwind CSS v4 have **breaking changes** from prior versions. Before writing any frontend code, read the relevant docs in `frontend/node_modules/next/dist/docs/` — APIs, conventions, and file structure may differ from training data.
-
-## Commands
-
-### Frontend (run from `frontend/`)
-
-```bash
-npm run dev      # start dev server on localhost:3000
-npm run build    # production build
-npm run lint     # ESLint
-```
-
-### Backend (run from `backend/`)
+## Starting the full stack
 
 ```powershell
-.\venv\Scripts\Activate.ps1          # activate virtualenv (PowerShell)
-pip install -r requirements.txt      # install deps
-uvicorn main:app --reload            # start dev server (once main.py exists)
+# 1. Redis
+docker run -d --name oauth-redis -p 6379:6379 redis:7-alpine
+
+# 2. Backend (from backend/)
+.\venv\Scripts\Activate.ps1
+uvicorn main:app --reload
+
+# 3. Frontend (from frontend/)
+npm run dev
 ```
 
-## Key Technology Notes
+## Key cross-cutting constraints
 
-- **Next.js 16 / React 19**: App Router is the default. Check `node_modules/next/dist/docs/` for current APIs before using Next.js-specific features.
-- **Tailwind CSS v4**: Configuration is in `postcss.config.mjs` (not `tailwind.config.js`). The v4 config format differs significantly from v3.
-- **Pydantic v2**: Model syntax changed from v1 — use `model_dump()` not `.dict()`, `model_validate()` not `.from_orm()`, etc.
+- The browser never receives an access token — the backend holds all OAuth credentials in Redis, encrypted.
+- Frontend API calls must include `credentials: 'include'` so the session cookie is sent cross-origin.
+- CORS is configured on the backend for `http://localhost:5173` with `allow_credentials=True`.
+- All secrets live in `backend/.env` (gitignored). See `backend/.env.example` for the full list.
