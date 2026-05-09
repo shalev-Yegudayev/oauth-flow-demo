@@ -1,4 +1,6 @@
 services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: redis-session-store
@@ -7,6 +9,56 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    networks:
+      - oauth-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oauth-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override host-local values with in-network equivalents
+      - REDIS_URL=redis://redis:6379/0
+      # Frontend is served on 5174 when using Docker; update CORS + redirect
+      - FRONTEND_ORIGIN=http://localhost:5174
+      - POST_LOGIN_REDIRECT=http://localhost:5174/profile
+    networks:
+      - oauth-net
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── React 19 frontend (Nginx SPA) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Vite bakes this URL into the bundle at build time.
+        # The browser reaches the backend directly via the mapped host port.
+        VITE_BACKEND_API_BASE_URL: http://localhost:8000
+    container_name: oauth-frontend
+    ports:
+      - "5174:80"
+    networks:
+      - oauth-net
+    depends_on:
+      - backend
+
+networks:
+  oauth-net:
+    driver: bridge
 
 volumes:
   redis_data:

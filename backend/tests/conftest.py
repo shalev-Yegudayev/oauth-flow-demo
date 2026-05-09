@@ -7,7 +7,6 @@ test suite runs without a running Redis instance.
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
 
 import fakeredis
 import fakeredis.aioredis as fakeredis_aio
@@ -102,7 +101,9 @@ def cipher(test_settings):
 def make_state_record():
     from app.models.session import StateRecord
 
-    def _make(provider: str = "github", code_verifier: str = "verifier-abc") -> StateRecord:
+    def _make(
+        provider: str = "github", code_verifier: str = "verifier-abc"
+    ) -> StateRecord:
         return StateRecord(
             provider=provider,
             code_verifier=code_verifier,
@@ -129,7 +130,9 @@ def make_session_record(cipher):
             provider="github",
             provider_user_id=provider_user_id,
             encrypted_access_token=cipher.encrypt(access_token),
-            encrypted_refresh_token=cipher.encrypt(refresh_token) if refresh_token else None,
+            encrypted_refresh_token=(
+                cipher.encrypt(refresh_token) if refresh_token else None
+            ),
             token_expires_at=token_expires_at,
             scope="public_repo read:user",
             created_at=created_at or datetime.now(UTC),
