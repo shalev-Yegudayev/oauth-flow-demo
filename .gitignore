@@ -67,6 +67,7 @@ out/
 # Build caches
 .turbo/
 .cache/
+*.tsbuildinfo
 
 # Package manager locks — keep one, ignore the others
 # (uncomment the one you're NOT using to avoid conflicts)

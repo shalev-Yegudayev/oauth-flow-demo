@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { UnauthorizedError } from './api';
+import { UnauthorizedError } from './errors';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
