@@ -70,7 +70,7 @@ The session store layer (`app/services/session_store.py`) is the only module tha
 | Session store | Redis 7                                                        |
 | Crypto        | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256)            |
 | Tests         | `pytest`, `pytest-asyncio`, `respx`                            |
-| Container     | Docker / Docker Compose (Redis)                                |
+| Container     | Docker / Docker Compose (full stack)                           |
 
 ---
 
@@ -78,25 +78,42 @@ The session store layer (`app/services/session_store.py`) is the only module tha
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- Docker (for Redis) — or a local Redis 7 install
 - A GitHub OAuth App (Settings → Developer settings → OAuth Apps)
   - **Authorization callback URL**: `http://localhost:8000/auth/github/callback`
+- Docker (required for both options below)
+- Python 3.11+ and Node.js 20+ (Option B only)
 
-### 1. Start Redis
+---
+
+### Option A — Full stack via Docker Compose (recommended)
+
+```powershell
+# 1. Copy and fill in secrets
+copy backend\.env.example backend\.env   # fill in the values listed below
+
+# 2. Build images and start all three services
+docker compose up --build
+```
+
+| Service  | URL                      |
+| -------- | ------------------------ |
+| Frontend | http://localhost:5174    |
+| Backend  | http://localhost:8000    |
+| Redis    | localhost:6379 (internal)|
+
+To stop: `docker compose down` (add `-v` to also wipe the Redis volume).
+
+---
+
+### Option B — Local development
+
+#### 1. Start Redis
 
 ```bash
 docker compose up -d redis
 ```
 
-Or, equivalently:
-
-```bash
-docker run -d --name oauth-redis -p 6379:6379 redis:7-alpine
-```
-
-### 2. Backend
+#### 2. Backend
 
 ```powershell
 cd backend
@@ -109,7 +126,7 @@ uvicorn main:app --reload
 
 Backend runs on `http://localhost:8000`.
 
-### 3. Frontend
+#### 3. Frontend
 
 ```bash
 cd frontend
@@ -118,6 +135,8 @@ npm run dev
 ```
 
 Frontend runs on `http://localhost:5173`.
+
+> **Note:** when running locally, `FRONTEND_ORIGIN` and `POST_LOGIN_REDIRECT` in `backend/.env` must point to `http://localhost:5173`, not `5174`.
 
 ### Environment variables (`backend/.env`)
 
@@ -178,10 +197,9 @@ A token refresh — if needed — happens transparently inside this handler; the
 
 Public Claude Code session links recorded during the build:
 
-- Overall setup and backend design - (add a link to /docs/Vorlon home assignment phase one - setup.md)
-- Backend Implementation - `https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA`
-- Frontent Implementation - `https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf`
-- _TBD — paste session URL here_
+- Overall setup and backend design — _(paste session URL)_
+- Backend Implementation — `https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA`
+- Frontend Implementation — `https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf`
 
 These cover the analysis, backend planning, and implementation phases.
 
@@ -189,12 +207,33 @@ These cover the analysis, backend planning, and implementation phases.
 
 ## What I Would Add With More Time
 
+### Features
+
 - **Second provider implementation** (Google or Microsoft) to exercise the strategy abstraction beyond a single concrete case and surface any leaky assumptions in the base class.
 - **Real internal service** instead of the in-process mock transport, plus a small contract test suite so the aggregation layer is verified against an actual HTTP boundary.
-- **End-to-end tests with Playwright** driving the full redirect chain in a headless browser, including the negative paths (state mismatch, expired refresh token, revoked grant).
-- **Observability**: structured JSON logging, OpenTelemetry traces across the OAuth flow, and per-provider metrics (token-refresh success rate, callback latency, 4xx/5xx rates).
-- **Production session store hardening**: Redis ACLs, TLS, and a dedicated logical DB; secrets sourced from a secret manager (AWS Secrets Manager / Vault) instead of `.env`.
-- **CI pipeline** (GitHub Actions) running lint, type-check (`mypy --strict`), unit tests, and a docker-compose-based integration test job.
-- **Frontend polish**: a real design system (shadcn/ui or Radix), proper loading/error states, and a TypeScript migration so the `UnifiedProfile` shape is shared end-to-end.
-- **Token revocation on logout** wired through to the provider, not just session deletion.
-- **Audit log** of auth events (login, refresh, revoke, failure) written to a separate append-only stream.
+- **Token revocation on logout** wired through to the provider, not just local session deletion.
+- **Active session management UI** — let users see all live sessions (device, IP, last-used timestamp) and revoke individual ones, backed by a `sessions:{user_id}` index in Redis.
+- **Multi-provider concurrent sessions** — allow a user to link GitHub, Google, and Microsoft accounts under a single identity, with a merge/conflict resolution strategy for duplicate emails.
+- **Provider-side revocation webhooks** — GitHub (and Google) can push a notification when a token is revoked externally; the backend should listen and immediately invalidate the corresponding session.
+
+### Security
+
+- **Refresh token rotation** — issue a new refresh token on every use and invalidate the previous one. A replayed old refresh token signals a possible token theft and should trigger session teardown.
+- **HTTPS / TLS in production** — TLS termination at the load balancer or reverse proxy, `Secure` cookie flag enforced by `ENV=prod`, and HSTS headers (`Strict-Transport-Security`).
+- **mTLS or signed JWTs for the internal service** — replace the plain `INTERNAL_API_KEY` header with mutual TLS or short-lived JWTs so the internal service can verify the caller's identity, not just a static secret.
+- **Suspicious-session detection** — flag (and optionally invalidate) sessions where the IP or user-agent changes mid-session, or where a token refresh is attempted from an unexpected geo-region.
+- **Secrets rotation pipeline** — automate `SESSION_SECRET` rotation end-to-end: provision a new key, add it to the Fernet fallback list, re-encrypt live sessions in a background job, then retire the old key. Currently this is documented but not automated.
+
+### Observability & Operations
+
+- **Structured JSON logging** with a correlation id per request, and redacted sensitive fields.
+- **OpenTelemetry traces** across the full OAuth flow (authorize → callback → profile fetch → internal service call).
+- **Per-provider metrics**: token-refresh success rate, callback latency p95, 4xx/5xx rates — exported to Prometheus / Grafana.
+- **Audit log** of all auth events (login, refresh, revoke, failure) written to a separate append-only stream (Redis Streams or a dedicated table).
+- **Production session store hardening**: Redis ACLs, TLS, a dedicated logical DB, and secrets sourced from a secret manager (AWS Secrets Manager / Vault) rather than `.env`.
+
+### Developer Experience
+
+- **CI pipeline** (GitHub Actions) running lint, type-check (`mypy --strict`), unit tests, and a docker-compose-based integration test job on every PR.
+- **End-to-end tests with Playwright** driving the full redirect chain in a headless browser, including negative paths (state mismatch, expired refresh token, revoked grant).
+- **Frontend polish**: TypeScript migration so the `UnifiedProfile` shape is shared end-to-end, a real design system (shadcn/ui or Radix), and proper loading / error states.

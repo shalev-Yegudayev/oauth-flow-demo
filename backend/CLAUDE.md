@@ -28,6 +28,20 @@ pytest --cov --cov-fail-under=90              # with coverage (fails below 90%)
 
 Test stack: `pytest-asyncio` (asyncio_mode=auto), `respx` for mocking `httpx`, `fakeredis` for Redis, `time-machine` for time travel.
 
+Tests are self-contained — no `.env` or running Redis needed. `tests/conftest.py` monkeypatches `get_settings` before any app module loads.
+
+**Test layers and key fixtures:**
+
+| Layer | Path | Notes |
+|---|---|---|
+| Unit | `tests/unit/` | Pure logic; uses `cipher`, `make_state_record`, `make_session_record` from root conftest |
+| Services | `tests/services/` | Uses `session_store` and `fake_redis` fixtures (fakeredis, no HTTP) |
+| API | `tests/api/` | Full request/response; `client` is unauthenticated, `authed_client` has a seeded session cookie |
+
+`github_mock` (autouse in `tests/api/`) blocks all `httpx` calls — register only the routes a test needs via `respx`.
+
+When adding a new `Settings` field, also add it to `TEST_SETTINGS_KWARGS` in `tests/conftest.py`.
+
 ### Redis (required for dev)
 
 ```bash
@@ -82,10 +96,12 @@ GitHub uses **PKCE with S256**; `app/core/security.py` generates the code verifi
 
 ## Key technology constraints
 
+- **Python 3.12**: use modern syntax (`X | Y` unions, `type` aliases, `match`).
 - **Pydantic v2**: `model_dump()` not `.dict()`, `model_validate()` not `.from_orm()`, validators via `@field_validator`.
 - **Async everywhere**: `httpx.AsyncClient` for outbound calls; `redis.asyncio` for Redis. No sync `requests` or sync Redis client.
 - **Error hierarchy**: raise `OAuthError`, `ProviderError`, `InternalServiceError`, or `TokenRefreshError` (all in `app/core/exceptions.py`). Exception handlers are registered in `main.py` — don't construct inline HTTP responses.
 - **Rate limiting**: `slowapi` `Limiter` (`app/core/rate_limit.py`) is keyed by session cookie, falling back to IP. Storage is wired to Redis in the lifespan.
+- **Ruff ignores**: `B008` (FastAPI `Depends()` in defaults) and `UP046` (intentional `Generic[T]` subclassing) are suppressed globally — don't add `# noqa` for these.
 
 ## Endpoints
 

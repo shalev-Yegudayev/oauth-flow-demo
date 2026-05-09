@@ -36,45 +36,42 @@ class GithubProvider(OAuthProvider):
         return f"{self._settings.GITHUB_AUTHORIZE_URL}?{params}"
 
     async def exchange_code(self, code: str, code_verifier: str) -> AccessToken:
-        resp = await self._http.post(
-            self._settings.GITHUB_TOKEN_URL,
+        return await self._post_token(
             data={
-                "client_id": self._settings.GITHUB_CLIENT_ID,
-                "client_secret": self._settings.GITHUB_CLIENT_SECRET.get_secret_value(),
                 "code": code,
                 "redirect_uri": self._settings.GITHUB_REDIRECT_URI,
                 "code_verifier": code_verifier,
             },
-            headers={"Accept": "application/json"},
             timeout=10.0,
+            exc=ProviderError,
         )
-        if resp.status_code != 200:
-            raise ProviderError(f"token_exchange_failed:{resp.status_code}")
-
-        payload = resp.json()
-        if "error" in payload:
-            raise ProviderError(payload.get("error_description", payload["error"]))
-
-        return self._parse_token_response(payload)
 
     async def refresh_token(self, refresh_token: str) -> AccessToken:
+        return await self._post_token(
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            timeout=8.0,
+            exc=TokenRefreshError,
+        )
+
+    async def _post_token(
+        self, data: dict, timeout: float, exc: type[Exception]
+    ) -> AccessToken:
         resp = await self._http.post(
             self._settings.GITHUB_TOKEN_URL,
             data={
                 "client_id": self._settings.GITHUB_CLIENT_ID,
                 "client_secret": self._settings.GITHUB_CLIENT_SECRET.get_secret_value(),
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
+                **data,
             },
             headers={"Accept": "application/json"},
-            timeout=8.0,
+            timeout=timeout,
         )
         if resp.status_code != 200:
-            raise TokenRefreshError("refresh_request_failed")
+            raise exc(f"token_request_failed:{resp.status_code}")
 
         payload = resp.json()
         if "error" in payload:
-            raise TokenRefreshError(payload.get("error_description", payload["error"]))
+            raise exc(payload.get("error_description", payload["error"]))
 
         return self._parse_token_response(payload)
 
@@ -112,8 +109,9 @@ class GithubProvider(OAuthProvider):
         url: str | None = (
             f"{self._settings.GITHUB_API_BASE}/user/repos?visibility=public&per_page=100&sort=updated"
         )
-        pages = 0
-        while url and pages < _MAX_REPO_PAGES:
+        for _ in range(_MAX_REPO_PAGES):
+            if not url:
+                break
             resp = await self._http.get(
                 url,
                 headers={"Authorization": f"Bearer {token}"},
@@ -129,7 +127,6 @@ class GithubProvider(OAuthProvider):
                 )
                 for item in resp.json()
             )
-            pages += 1
             url = _next_link(resp.headers.get("Link", ""))
         return repos
 
