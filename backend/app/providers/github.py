@@ -140,11 +140,14 @@ class GithubProvider(OAuthProvider):
             expires_at = datetime.now(UTC) + timedelta(
                 seconds=int(payload["expires_in"])
             )
+        raw_scope = payload.get("scope", "")
+        # GitHub returns scopes comma-separated; normalize to space-separated.
+        normalized_scope = raw_scope.replace(",", " ")
         return AccessToken(
             value=payload["access_token"],
             refresh_token=payload.get("refresh_token"),
             expires_at=expires_at,
-            scope=payload.get("scope", ""),
+            scope=normalized_scope,
         )
 
 

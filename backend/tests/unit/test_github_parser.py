@@ -15,7 +15,13 @@ class TestParseTokenResponse:
         result = GithubProvider._parse_token_response(payload)
         assert result.value == "gho_abc"
 
-    def test_parses_scope(self):
+    def test_parses_scope_comma_separated(self):
+        # GitHub returns scopes comma-separated; parser must normalize to spaces.
+        payload = {"access_token": "gho_abc", "scope": "public_repo,read:user"}
+        result = GithubProvider._parse_token_response(payload)
+        assert result.scope == "public_repo read:user"
+
+    def test_parses_scope_space_separated(self):
         payload = {"access_token": "gho_abc", "scope": "public_repo read:user"}
         result = GithubProvider._parse_token_response(payload)
         assert result.scope == "public_repo read:user"

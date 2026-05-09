@@ -83,15 +83,27 @@ async def oauth_callback(
     error: str = Query(default=None),
 ) -> RedirectResponse:
     if error:
-        raise OAuthError(f"provider_error:{error}")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_ORIGIN}/login?error={error}",
+            status_code=302,
+        )
     if not code or not state:
-        raise OAuthError("missing_code_or_state")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_ORIGIN}/login?error=missing_code_or_state",
+            status_code=302,
+        )
 
     state_record = await store.pop_state(state)
     if state_record is None:
-        raise OAuthError("invalid_or_expired_state")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_ORIGIN}/login?error=invalid_or_expired_state",
+            status_code=302,
+        )
     if state_record.provider != provider:
-        raise OAuthError("provider_mismatch")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_ORIGIN}/login?error=provider_mismatch",
+            status_code=302,
+        )
 
     token = await oauth_provider.exchange_code(
         code, state_record.code_verifier
@@ -99,7 +111,10 @@ async def oauth_callback(
 
     granted = set[str](token.scope.split())
     if not set[str](oauth_provider.required_scopes).issubset(granted):
-        raise OAuthError("insufficient_scope")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_ORIGIN}/login?error=insufficient_scope",
+            status_code=302,
+        )
 
     user_id = await oauth_provider.fetch_user_id(token.value)
 

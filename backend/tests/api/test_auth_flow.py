@@ -28,7 +28,7 @@ def _seed_state(store, state_key: str = "test-state-abc", verifier: str = "test-
     )
 
 
-def _mock_github_token(github_mock, test_settings, *, scope: str = "public_repo read:user"):
+def _mock_github_token(github_mock, test_settings, *, scope: str = "public_repo,read:user"):
     github_mock.post(test_settings.GITHUB_TOKEN_URL).respond(
         200,
         json={"access_token": "gho_callback_test", "scope": scope},
