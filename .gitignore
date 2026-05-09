@@ -3,7 +3,7 @@
 # =============================================================================
 .env
 .env.*
-!.env.example          # always allow the safe template
+!.env.example          # always allow the safe template (root, backend/, frontend/)
 *.pem
 *.key
 secrets/
@@ -28,7 +28,6 @@ ENV/
 
 # Distribution / packaging
 build/
-dist/
 *.egg-info/
 *.egg
 .eggs/
@@ -48,33 +47,26 @@ htmlcov/
 .ruff_cache/
 .dmypy.json
 dmypy.json
-pyrightconfig.json
 
 # =============================================================================
-# NODE / FRONTEND (Vite + Next.js)
+# NODE / FRONTEND (Vite)
 # =============================================================================
 node_modules/
 
-# Vite
+# Build output
 dist/
 dist-ssr/
+out/
 .vite/
 
-# Next.js
-.next/
-out/
+# TypeScript incremental build cache
+*.tsbuildinfo
 
 # Build caches
 .turbo/
 .cache/
-*.tsbuildinfo
 
-# Package manager locks — keep one, ignore the others
-# (uncomment the one you're NOT using to avoid conflicts)
-# yarn.lock
-# pnpm-lock.yaml
-
-# Local Vite / CRA env overrides
+# Local env overrides (e.g. .env.local, vite.config.local.ts)
 *.local
 
 # =============================================================================
@@ -86,20 +78,9 @@ appendonly.aof
 redis.conf.local
 
 # =============================================================================
-# PRISMA / POSTGRESQL (future-proofing)
-# =============================================================================
-# Generated Prisma client goes in node_modules — no extra ignore needed.
-# Keep prisma/migrations/ committed. Ignore local dev DB dumps:
-*.dump
-*.sql.gz
-pgdata/
-
-# =============================================================================
 # DOCKER OVERRIDES
 # =============================================================================
-docker-compose.override.yml
-docker-compose.*.yml
-!docker-compose.yml     # keep the base file
+docker-compose.override.yml   # standard Docker local-override convention
 .docker/
 
 # =============================================================================
@@ -156,7 +137,6 @@ $RECYCLE.BIN/
 *.iml
 *.ipr
 *.iws
-out/
 
 # Visual Studio
 *.suo
@@ -166,7 +146,6 @@ out/
 
 # Vim / Emacs
 *.sw?
-*~
 \#*\#
 .#*
 *.orig
@@ -176,15 +155,12 @@ out/
 # =============================================================================
 # Claude Code project memory (local-only, not for sharing)
 .claude/
+memory/
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
+# Local-only scripts not intended for the shared codebase
+scripts/
 
 # Temporary files
 *.tmp
 *.temp
 *.bak
-*.orig
-scripts/
-memory/
