@@ -11,6 +11,9 @@ function ProviderSections({ profile }: { profile: ProviderProfile }) {
   switch (profile.user.provider) {
     case 'github':
       return <GithubSectionsView sections={profile.sections} />;
+    default:
+      profile.user.provider satisfies never;
+      return null;
   }
 }
 
@@ -21,11 +24,7 @@ export function ProfilePage() {
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
-          {data ? (
-            <ProfileHeader user={data.user} />
-          ) : (
-            <div className="h-7 w-48 animate-pulse rounded bg-gray-200" />
-          )}
+          {data && <ProfileHeader user={data.user} />}
           <LogoutButton />
         </div>
 

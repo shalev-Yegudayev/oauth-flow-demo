@@ -5,8 +5,7 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error) => {
-        // 401s are definitive — the session cookie is missing or expired, so retrying
-        // the same request will keep failing until the user re-authenticates.
+        // 401 is definitive — re-auth required before retrying.
         if (error instanceof UnauthorizedError) return false;
         return failureCount < 2;
       },

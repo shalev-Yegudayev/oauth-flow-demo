@@ -1,15 +1,13 @@
 import { Navigate } from 'react-router-dom';
 import { useProfile } from '@/hooks/useProfile';
-import { UnauthorizedError } from '@/lib/errors';
+import { ProfileSkeleton } from './ProfileSkeleton';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isLoading, error } = useProfile();
 
-  if (isLoading) return null;
+  if (isLoading) return <ProfileSkeleton />;
 
-  if (error instanceof UnauthorizedError) {
-    return <Navigate to="/login" replace />;
-  }
+  if (error) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }

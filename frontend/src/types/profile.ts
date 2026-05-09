@@ -1,28 +1,29 @@
-import type { GithubSections } from "./provider-types/github";
+import { z } from 'zod';
+import { GithubSectionsSchema } from "./provider-types/github";
 
-export type Tier = "Pro" | "Basic";
+export const TierSchema = z.enum(["Pro", "Basic"]);
+export type Tier = z.infer<typeof TierSchema>;
 
-export type UserSummary = {
-  id: string;
-  name: string;
-  provider: string;
-  tier: Tier;
-  role: string;
-};
+const UserSummaryBaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  tier: TierSchema,
+  role: z.string(),
+});
 
-type Profile<S = unknown> = {
-  user: UserSummary;
-  sections: S;
-};
+export type UserSummary = z.infer<typeof UserSummaryBaseSchema> & { provider: string };
+
+const GithubProfileSchema = z.object({
+  user: UserSummaryBaseSchema.extend({ provider: z.literal('github') }),
+  sections: GithubSectionsSchema,
+});
+
+export const ProviderProfileSchema = GithubProfileSchema;
 
 export type ProviderSectionsMap = {
-  github: GithubSections;
+  github: z.infer<typeof GithubSectionsSchema>;
 };
 
 export type SupportedProvider = keyof ProviderSectionsMap;
 
-export type ProviderProfile = {
-  [P in SupportedProvider]: Profile<ProviderSectionsMap[P]> & {
-    user: UserSummary & { provider: P };
-  };
-}[SupportedProvider];
+export type ProviderProfile = z.infer<typeof ProviderProfileSchema>;
