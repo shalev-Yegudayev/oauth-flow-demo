@@ -178,8 +178,9 @@ A token refresh — if needed — happens transparently inside this handler; the
 
 Public Claude Code session links recorded during the build:
 
-- `https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA`
-- _TBD — paste session URL here_
+- Overall setup and backend design - (add a link to /docs/Vorlon home assignment phase one - setup.md)
+- Backend Implementation - `https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA`
+- Frontent Implementation - `https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf`
 - _TBD — paste session URL here_
 
 These cover the analysis, backend planning, and implementation phases.

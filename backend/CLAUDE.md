@@ -10,21 +10,25 @@ FastAPI backend: OAuth broker, session manager, and profile aggregator. The fron
 
 ```powershell
 .\venv\Scripts\Activate.ps1          # activate virtualenv
-pip install -r requirements.txt      # install deps
+pip install -r requirements.txt      # install runtime deps
+pip install -r requirements-test.txt # install test deps (includes runtime)
 uvicorn main:app --reload            # dev server on http://localhost:8000
+ruff check .                         # lint
+ruff format .                        # format
 ```
 
 ### Tests
 
 ```powershell
-pytest                               # run all tests
-pytest tests/test_auth.py -k "login" # run single test by name
-pytest -x                            # stop on first failure
+pytest                                        # run all tests
+pytest tests/unit/test_crypto.py -k "rotation" # run single test by name
+pytest -x                                     # stop on first failure
+pytest --cov --cov-fail-under=90              # with coverage (fails below 90%)
 ```
 
-Test stack: `pytest-asyncio` for async test functions, `respx` for mocking `httpx` calls.
+Test stack: `pytest-asyncio` (asyncio_mode=auto), `respx` for mocking `httpx`, `fakeredis` for Redis, `time-machine` for time travel.
 
-### Redis (required)
+### Redis (required for dev)
 
 ```bash
 docker run -d --name oauth-redis -p 6379:6379 redis:7-alpine
@@ -34,9 +38,9 @@ docker run -d --name oauth-redis -p 6379:6379 redis:7-alpine
 
 ```
 backend/
-├── main.py        # FastAPI app factory, lifespan (Redis + httpx), CORS, slowapi  [NOT YET CREATED]
+├── main.py        # FastAPI app factory, lifespan (Redis + httpx), CORS, slowapi, log redaction
 ├── deps.py        # DI providers: get_redis, get_http_client, get_session_store,
-│                  #               get_provider, get_authenticated_session         [NOT YET CREATED]
+│                  #               get_provider, get_authenticated_session
 ├── config.py      # Pydantic Settings — all secrets/TTLs loaded from .env
 └── app/
     ├── core/      # exceptions.py, crypto.py, security.py, rate_limit.py
@@ -44,47 +48,50 @@ backend/
     │              # profile.py (UnifiedProfile, UserSummary DTOs)
     ├── providers/ # base.py (OAuthProvider ABC), github.py, __init__.py (registry)
     ├── services/  # session_store.py, internal_service.py, token_refresher.py
-    └── routes/    # auth.py, profile.py  [NOT YET CREATED]
+    └── routes/    # auth.py, profile.py
 ```
-
-**Implementation status**: `app/core/`, `app/models/`, `app/providers/`, `app/services/` are complete. `main.py`, `deps.py`, `app/routes/`, and `tests/` still need to be created. The full plan lives in `memory/BACKEND_IMPLEMENTATION_PLAN.md`.
 
 ## Architecture
 
 ### Session & token security
 
 - Session cookie: `HttpOnly`, `SameSite=Lax` (survives the OAuth redirect chain), `Secure` in production. The browser holds only an opaque session ID.
-- Access tokens are Fernet-encrypted (`app/core/crypto.py`, AES-128-CBC). `TokenCipher` supports key rotation — retired keys stay in a fallback list so live sessions survive a key rollover.
-- Redis state records use a short TTL (~5 min) for CSRF protection; session records use a longer TTL with sliding expiry.
-- `session_store.py` uses Lua scripts for atomic Redis operations to prevent race conditions on concurrent requests.
+- Access tokens are Fernet-encrypted (`app/core/crypto.py`). `TokenCipher` supports key rotation via a comma-separated `SESSION_SECRET` list — retired keys stay in the fallback list so live sessions survive a key rollover.
+- Redis state records use a short TTL (~5 min) for CSRF protection; session records use a longer TTL with sliding expiry and a **12-hour hard ceiling** enforced at read time.
+- `session_store.py` uses Lua scripts for atomic Redis operations (e.g., `pop_state` is GET+DEL in a single script to prevent state replay).
 
 ### Provider abstraction
 
-`OAuthProvider` (abstract, `app/providers/base.py`) defines the lifecycle: `authorization_url`, `exchange_code`, `refresh_token`, `fetch_user_id`, `revoke_token`, `fetch_profile_sections`. `GithubProvider` is the reference implementation.
+`OAuthProvider[T]` (`app/providers/base.py`) is a Generic ABC defining the full lifecycle: `authorization_url`, `exchange_code`, `refresh_token`, `fetch_user_id`, `revoke_token`, `fetch_profile_sections`. `GithubProvider` is the reference implementation.
 
-Adding a provider requires only a new subclass and a registration entry in `app/providers/__init__.py` — no changes to route handlers, session logic, or the `/profile` aggregation layer.
+Adding a provider = new subclass + one registration entry in `app/providers/__init__.py`. No changes to route handlers, session logic, or `/profile` aggregation.
 
 GitHub uses **PKCE with S256**; `app/core/security.py` generates the code verifier and challenge.
 
 ### Token refresh
 
-`app/services/token_refresher.py` refreshes on first read after expiry. A Redis-based lock prevents duplicate refresh attempts under concurrent requests. There is a **12-hour hard ceiling** — no refresh is attempted past that point regardless of token state.
+`TokenRefresher.ensure_fresh()` runs on every authenticated request. It skips tokens with >60s of runway, hard-stops at the 12-hour ceiling, and uses a Redis lock to prevent duplicate refresh attempts under concurrent requests.
 
 ### Internal service mock
 
-`app/services/internal_service.py` uses a custom HTTPX transport that returns deterministic fixture data seeded by `user_id` (no real network call). The mock returns a `tier` field (Bronze / Silver / Gold) consumed by `/profile`.
+`InternalServiceClient` (`app/services/internal_service.py`) accepts a custom `httpx` transport. In tests and when `MOCK=true`, `mock_transport_handler` intercepts calls and returns deterministic fixture profiles seeded by `user_id` (seeded RNG — same user always gets same tier/role).
+
+### Logging
+
+`main.py` installs a `_RedactingFilter` on the root logger that strips credential-shaped tokens from all log output before they reach any handler.
 
 ## Key technology constraints
 
 - **Pydantic v2**: `model_dump()` not `.dict()`, `model_validate()` not `.from_orm()`, validators via `@field_validator`.
-- **Async everywhere**: `httpx.AsyncClient` for outbound calls; `redis.asyncio` for Redis. No sync `requests` or sync Redis client — both must compose with FastAPI's event loop.
-- **Error hierarchy**: raise `OAuthError`, `ProviderError`, `InternalServiceError`, or `TokenRefreshError` (all in `app/core/exceptions.py`). Exception handlers are registered there — don't construct inline HTTP responses.
-- **Rate limiting**: `slowapi` `Limiter` lives in `app/core/rate_limit.py` and must be wired into the FastAPI app in `main.py`.
+- **Async everywhere**: `httpx.AsyncClient` for outbound calls; `redis.asyncio` for Redis. No sync `requests` or sync Redis client.
+- **Error hierarchy**: raise `OAuthError`, `ProviderError`, `InternalServiceError`, or `TokenRefreshError` (all in `app/core/exceptions.py`). Exception handlers are registered in `main.py` — don't construct inline HTTP responses.
+- **Rate limiting**: `slowapi` `Limiter` (`app/core/rate_limit.py`) is keyed by session cookie, falling back to IP. Storage is wired to Redis in the lifespan.
 
 ## Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/auth/{provider}` | Redirect to provider authorization URL |
-| GET | `/auth/{provider}/callback` | Exchange code, create session, set cookie |
-| GET | `/profile` | Return normalized profile (requires session cookie) |
+| Method | Path | Rate limit | Description |
+|---|---|---|---|
+| GET | `/auth/{provider}` | 10/min | Redirect to provider authorization URL |
+| GET | `/auth/{provider}/callback` | 20/min | Exchange code, create session, set cookie |
+| POST | `/auth/logout` | 30/min | Revoke token, delete session, clear cookie |
+| GET | `/profile` | 60/min | Return normalized profile (requires session cookie) |
