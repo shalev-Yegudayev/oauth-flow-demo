@@ -137,6 +137,14 @@ Frontend runs on `http://localhost:5173`.
 | `STATE_TTL_SECONDS`        | OAuth state TTL (default `300`)                                                                                                                    |
 | `USER_PROFILE_TTL_SECONDS` | Internal-service profile cache TTL (default `3600`)                                                                                                |
 
+### Environment variables (`frontend/.env`)
+
+Vite inlines `VITE_*` variables into the bundle at build time, so they must be set before `npm run build` (or `docker compose build`), not at container start.
+
+| Variable                    | Description                                                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `VITE_BACKEND_API_BASE_URL` | Backend origin the SPA calls (e.g. `http://localhost:8000`). Must match the host the browser can reach the backend on. |
+
 ---
 
 ## API Documentation
