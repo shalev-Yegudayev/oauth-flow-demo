@@ -173,13 +173,13 @@ Together these cover the analysis, planning, implementation, and review phases.
 ## What I Would Add With More Time
 
 **Features**
+
 - Second provider (Google/Microsoft) to exercise the strategy abstraction
 - Real internal service with contract tests
-- Active-session management UI backed by a `sessions:{user_id}` index
 - Multi-provider account linking
-- Revocation webhooks
 
 **Security**
+
 - Explicit redirect URI validation — store the provider's expected `redirect_uri` in the state record; validate on callback that the incoming parameter matches, preventing accidental misconfiguration
 - Refresh-token rotation with replay detection
 - mTLS or signed JWTs for the internal service (instead of a static API key)
@@ -187,6 +187,7 @@ Together these cover the analysis, planning, implementation, and review phases.
 - Automated `SESSION_SECRET` rotation pipeline
 
 **Observability**
+
 - Structured JSON logs with per-request correlation IDs
 - OpenTelemetry traces across the full flow
 - Per-provider Prometheus metrics (refresh success, callback p95, error rates)
@@ -194,6 +195,7 @@ Together these cover the analysis, planning, implementation, and review phases.
 - Hardened prod Redis (ACLs, TLS, secret manager)
 
 **Developer Experience**
+
 - GitHub Actions CI (lint, `mypy --strict`, tests, compose-based integration job)
 - Playwright E2E covering negative paths
 - Real design system (shadcn/Radix) and frontend test coverage (Vitest + RTL)
