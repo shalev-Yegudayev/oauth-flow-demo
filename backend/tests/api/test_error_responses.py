@@ -23,9 +23,7 @@ class TestCallbackErrorShape:
         )
 
     async def test_callback_invalid_state_redirects(self, client, test_settings):
-        response = await client.get(
-            "/auth/github/callback?code=abc&state=ghost"
-        )
+        response = await client.get("/auth/github/callback?code=abc&state=ghost")
         assert response.status_code == 302
         assert "invalid_or_expired_state" in response.headers["location"]
 
@@ -63,9 +61,7 @@ class TestSecretNonDisclosure:
 
     async def test_provider_error_redirect_does_not_expose_raw_param(self, client):
         """The redirect URL preserves the provider error value but must not add secrets."""
-        response = await client.get(
-            "/auth/github/callback?error=access_denied"
-        )
+        response = await client.get("/auth/github/callback?error=access_denied")
         assert response.status_code == 302
         location = response.headers["location"]
         assert "access_denied" in location

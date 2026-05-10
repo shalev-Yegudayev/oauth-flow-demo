@@ -48,18 +48,14 @@ def _login_redirect(frontend_origin: str, error: str) -> str:
 class TestMissingParams:
     async def test_missing_code_redirects_to_login(self, client, store, test_settings):
         await _seed_state(store)
-        response = await client.get(
-            "/auth/github/callback?state=test-state-sec"
-        )
+        response = await client.get("/auth/github/callback?state=test-state-sec")
         assert response.status_code == 302
         assert response.headers["location"] == _login_redirect(
             test_settings.FRONTEND_ORIGIN, "missing_code_or_state"
         )
 
     async def test_missing_state_redirects_to_login(self, client, test_settings):
-        response = await client.get(
-            "/auth/github/callback?code=some-code"
-        )
+        response = await client.get("/auth/github/callback?code=some-code")
         assert response.status_code == 302
         assert response.headers["location"] == _login_redirect(
             test_settings.FRONTEND_ORIGIN, "missing_code_or_state"
@@ -73,9 +69,7 @@ class TestMissingParams:
         )
 
     async def test_provider_error_param_redirects_to_login(self, client, test_settings):
-        response = await client.get(
-            "/auth/github/callback?error=access_denied"
-        )
+        response = await client.get("/auth/github/callback?error=access_denied")
         assert response.status_code == 302
         assert response.headers["location"] == (
             f"{test_settings.FRONTEND_ORIGIN}/login?error=access_denied"
@@ -98,9 +92,7 @@ class TestStateValidation:
         )
 
     async def test_unknown_state_error_in_redirect(self, client, test_settings):
-        response = await client.get(
-            "/auth/github/callback?code=abc&state=ghost-state"
-        )
+        response = await client.get("/auth/github/callback?code=abc&state=ghost-state")
         assert response.status_code == 302
         assert "invalid_or_expired_state" in response.headers["location"]
 
@@ -116,14 +108,10 @@ class TestStateValidation:
             200, json={"id": 99}
         )
 
-        first = await client.get(
-            "/auth/github/callback?code=abc&state=replay-state"
-        )
+        first = await client.get("/auth/github/callback?code=abc&state=replay-state")
         assert first.status_code == 307
 
-        second = await client.get(
-            "/auth/github/callback?code=abc&state=replay-state"
-        )
+        second = await client.get("/auth/github/callback?code=abc&state=replay-state")
         assert second.status_code == 302
         assert "invalid_or_expired_state" in second.headers["location"]
 
@@ -156,9 +144,7 @@ class TestScopeEnforcement:
             200, json={"access_token": "gho_narrow", "scope": "public_repo"}
         )
 
-        response = await client.get(
-            "/auth/github/callback?code=abc&state=scope-state"
-        )
+        response = await client.get("/auth/github/callback?code=abc&state=scope-state")
         assert response.status_code == 302
         assert response.headers["location"] == _login_redirect(
             test_settings.FRONTEND_ORIGIN, "insufficient_scope"

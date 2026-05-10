@@ -27,9 +27,7 @@ from config import get_settings
 async def lifespan(app: FastAPI):
     settings = get_settings()
 
-    app.state.redis = aioredis.from_url(
-        settings.REDIS_URL, decode_responses=False
-    )
+    app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
     app.state.provider_http = httpx.AsyncClient(timeout=10.0)
 
     if settings.INTERNAL_SERVICE_MOCK:
@@ -39,10 +37,7 @@ async def lifespan(app: FastAPI):
     else:
         app.state.internal_http = httpx.AsyncClient(timeout=10.0)
 
-    secrets = [
-        s.strip()
-        for s in settings.SESSION_SECRET.get_secret_value().split(",")
-    ]
+    secrets = [s.strip() for s in settings.SESSION_SECRET.get_secret_value().split(",")]
     app.state.cipher = TokenCipher(secrets)
 
     app.state.store = SessionStore(
@@ -51,9 +46,7 @@ async def lifespan(app: FastAPI):
         settings.STATE_TTL_SECONDS,
         settings.USER_PROFILE_TTL_SECONDS,
     )
-    app.state.internal_client = InternalServiceClient(
-        app.state.internal_http, settings
-    )
+    app.state.internal_client = InternalServiceClient(app.state.internal_http, settings)
 
     app.state.limiter = Limiter(
         key_func=get_session_key, storage_uri=settings.REDIS_URL

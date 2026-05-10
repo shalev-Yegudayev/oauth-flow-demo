@@ -44,7 +44,9 @@ class TestPutPopState:
         result = await session_store.pop_state("nonexistent-state")
         assert result is None
 
-    async def test_state_preserves_code_verifier(self, session_store, make_state_record):
+    async def test_state_preserves_code_verifier(
+        self, session_store, make_state_record
+    ):
         state = "test-state-003"
         verifier = "super-secret-verifier-xyz"
         await session_store.put_state(state, make_state_record(code_verifier=verifier))
@@ -59,7 +61,9 @@ class TestPutPopState:
         result = await session_store.pop_state(state)
         assert result.provider == "github"
 
-    async def test_concurrent_pops_only_one_succeeds(self, session_store, make_state_record):
+    async def test_concurrent_pops_only_one_succeeds(
+        self, session_store, make_state_record
+    ):
         """Two coroutines racing on the same state — exactly one must win."""
         state = "test-state-race"
         await session_store.put_state(state, make_state_record())
@@ -78,7 +82,9 @@ class TestPutPopState:
 
 
 class TestCreateGetSession:
-    async def test_get_returns_created_session(self, session_store, make_session_record):
+    async def test_get_returns_created_session(
+        self, session_store, make_session_record
+    ):
         record = make_session_record(session_id="sess-get-001")
         await session_store.create_session(record)
 
@@ -99,8 +105,12 @@ class TestCreateGetSession:
         result = await session_store.get_session("sess-del-001")
         assert result is None
 
-    async def test_update_session_persists_changes(self, session_store, make_session_record, cipher):
-        record = make_session_record(session_id="sess-upd-001", access_token="old-token")
+    async def test_update_session_persists_changes(
+        self, session_store, make_session_record, cipher
+    ):
+        record = make_session_record(
+            session_id="sess-upd-001", access_token="old-token"
+        )
         await session_store.create_session(record)
 
         updated = record.model_copy(
@@ -115,7 +125,9 @@ class TestCreateGetSession:
         self, session_store, make_session_record, fake_redis
     ):
         """Access token must never appear in plaintext in Redis."""
-        record = make_session_record(session_id="sess-enc-001", access_token="gho_plaintext")
+        record = make_session_record(
+            session_id="sess-enc-001", access_token="gho_plaintext"
+        )
         await session_store.create_session(record)
 
         raw: bytes = await fake_redis.get("oauth:session:sess-enc-001")
@@ -144,7 +156,9 @@ class TestTwelveHourCeiling:
         self, session_store, make_session_record
     ):
         created_at = datetime.now(UTC) - timedelta(hours=13)
-        record = make_session_record(session_id="sess-12h-expired", created_at=created_at)
+        record = make_session_record(
+            session_id="sess-12h-expired", created_at=created_at
+        )
         await session_store.create_session(record)
 
         result = await session_store.get_session("sess-12h-expired")
@@ -169,7 +183,9 @@ class TestTwelveHourCeiling:
 
 
 class TestSlidingTtl:
-    async def test_get_session_resets_ttl(self, session_store, make_session_record, fake_redis):
+    async def test_get_session_resets_ttl(
+        self, session_store, make_session_record, fake_redis
+    ):
         record = make_session_record(session_id="sess-sliding")
         await session_store.create_session(record)
 
@@ -210,7 +226,10 @@ class TestUserProfileCache:
 
     async def test_profile_overwrite(self, session_store):
         profile = UserProfileRecord(
-            provider_user_id="uid-002", user_name="Old Name", tier="Basic", role="viewer"
+            provider_user_id="uid-002",
+            user_name="Old Name",
+            tier="Basic",
+            role="viewer",
         )
         await session_store.set_user_profile(profile)
 

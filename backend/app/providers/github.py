@@ -36,9 +36,7 @@ class GithubProvider(OAuthProvider):
         )
         return f"{self._settings.GITHUB_AUTHORIZE_URL}?{params}"
 
-    async def exchange_code(
-        self, code: str, code_verifier: str
-    ) -> AccessToken:
+    async def exchange_code(self, code: str, code_verifier: str) -> AccessToken:
         return await self._post_token(
             data={
                 "code": code,

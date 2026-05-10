@@ -20,33 +20,23 @@ class RedactingFilter(logging.Filter):
 
 
 def generate_session_id() -> str:
-    return (
-        base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("ascii")
-    )
+    return base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("ascii")
 
 
 def generate_state() -> str:
-    return (
-        base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("ascii")
-    )
+    return base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("ascii")
 
 
 def generate_code_verifier() -> str:
-    return (
-        base64.urlsafe_b64encode(os.urandom(64)).rstrip(b"=").decode("ascii")
-    )
+    return base64.urlsafe_b64encode(os.urandom(64)).rstrip(b"=").decode("ascii")
 
 
 def compute_code_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    return (
-        base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    )
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def set_session_cookie(
-    response: Response, session_id: str, settings: Settings
-) -> None:
+def set_session_cookie(response: Response, session_id: str, settings: Settings) -> None:
     response.set_cookie(
         key="session_id",
         value=session_id,

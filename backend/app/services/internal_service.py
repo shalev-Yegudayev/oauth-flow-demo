@@ -9,12 +9,8 @@ from app.core.exceptions import InternalServiceError
 from app.models.session import UserProfileRecord
 from config import Settings
 
-_FIRST_NAMES = [
-    "Alex", "Jordan", "Riley", "Sam", "Taylor", "Morgan", "Casey", "Jamie"
-]
-_LAST_NAMES = [
-    "Chen", "Patel", "Garcia", "Smith", "Cohen", "Nguyen", "Khan", "Silva"
-]
+_FIRST_NAMES = ["Alex", "Jordan", "Riley", "Sam", "Taylor", "Morgan", "Casey", "Jamie"]
+_LAST_NAMES = ["Chen", "Patel", "Garcia", "Smith", "Cohen", "Nguyen", "Khan", "Silva"]
 _ROLES = ["developer", "admin", "analyst", "viewer"]
 
 
@@ -33,9 +29,7 @@ def mock_transport_handler(request: httpx.Request) -> httpx.Response:
         request.headers.get("X-Internal-API-Key")
         != settings.INTERNAL_API_KEY.get_secret_value()
     ):
-        return httpx.Response(
-            401, json={"error": "missing_or_invalid_api_key"}
-        )
+        return httpx.Response(401, json={"error": "missing_or_invalid_api_key"})
     user_id = request.url.path.rsplit("/", 1)[-1]
     rng = random.Random(user_id)
     return httpx.Response(

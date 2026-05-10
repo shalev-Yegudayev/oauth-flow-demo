@@ -19,7 +19,10 @@ def key_b() -> str:
 class TestEncryptDecryptRoundTrip:
     def test_plaintext_survives_round_trip(self, key_a):
         cipher = TokenCipher([key_a])
-        assert cipher.decrypt(cipher.encrypt("gho_some_access_token")) == "gho_some_access_token"
+        assert (
+            cipher.decrypt(cipher.encrypt("gho_some_access_token"))
+            == "gho_some_access_token"
+        )
 
     def test_empty_string_round_trip(self, key_a):
         cipher = TokenCipher([key_a])

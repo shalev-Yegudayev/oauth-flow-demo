@@ -87,9 +87,7 @@ class SessionStore:
     # User profile cache (internal service data — independent TTL)
     # ------------------------------------------------------------------
 
-    async def get_user_profile(
-        self, provider_user_id: str
-    ) -> UserProfileRecord | None:
+    async def get_user_profile(self, provider_user_id: str) -> UserProfileRecord | None:
         key = f"{_PROFILE_PREFIX}{provider_user_id}"
         raw: bytes | None = await self._r.get(key)
         if raw is None:

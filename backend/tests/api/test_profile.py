@@ -87,9 +87,7 @@ class TestProfileResponse:
         assert "repositories" in sections
         assert isinstance(sections["repositories"], list)
 
-    async def test_repository_fields(
-        self, authed_client, github_mock, test_settings
-    ):
+    async def test_repository_fields(self, authed_client, github_mock, test_settings):
         _mock_repos(github_mock, test_settings)
         repos = (await authed_client.get("/profile")).json()["sections"]["repositories"]
         assert len(repos) == 2

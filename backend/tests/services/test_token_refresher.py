@@ -273,7 +273,7 @@ class TestLockContention:
             # an update to happen on the first poll cycle by running the store
             # update concurrently with the wait loop.
             async def _simulate_lock_holder():
-                await asyncio.sleep(0)          # yield so waiter starts first
+                await asyncio.sleep(0)  # yield so waiter starts first
                 await session_store.update_session(refreshed_record)
 
             refresher = TokenRefresher(fake_redis, session_store, cipher, mock_provider)
@@ -320,7 +320,9 @@ class TestLockContention:
             # Delete the session to simulate the lock holder failing.
             await session_store.delete_session(session_id)
 
-            refresher = TokenRefresher(fake_redis, session_store, cipher, failing_provider)
+            refresher = TokenRefresher(
+                fake_redis, session_store, cipher, failing_provider
+            )
 
             with pytest.raises(TokenRefreshError, match="session_lost_during_refresh"):
                 await refresher.ensure_fresh(record)

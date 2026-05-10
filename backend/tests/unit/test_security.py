@@ -30,7 +30,10 @@ class TestGenerateState:
         for _ in range(20):
             state = generate_state()
             # base64url alphabet plus no padding '='
-            assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in state)
+            assert all(
+                c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+                for c in state
+            )
 
 
 class TestGenerateCodeVerifier:
@@ -131,7 +134,9 @@ class TestSetSessionCookie:
     def test_secure_in_prod(self, test_settings):
         from config import Settings
 
-        prod_settings = Settings.model_validate({**test_settings.model_dump(), "ENV": "prod"})
+        prod_settings = Settings.model_validate(
+            {**test_settings.model_dump(), "ENV": "prod"}
+        )
         resp = Response()
         set_session_cookie(resp, "sess-xyz", prod_settings)
         header = self._get_cookie_header(resp).lower()

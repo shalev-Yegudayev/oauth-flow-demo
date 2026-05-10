@@ -11,7 +11,6 @@ T = TypeVar("T")
 
 
 class AccessToken(BaseModel):
-
     value: str
     refresh_token: str | None
     expires_at: datetime | None

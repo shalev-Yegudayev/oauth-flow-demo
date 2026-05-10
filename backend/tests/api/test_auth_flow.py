@@ -16,7 +16,9 @@ from app.models.session import StateRecord
 # ---------------------------------------------------------------------------
 
 
-def _seed_state(store, state_key: str = "test-state-abc", verifier: str = "test-verifier"):
+def _seed_state(
+    store, state_key: str = "test-state-abc", verifier: str = "test-verifier"
+):
     return store.put_state(
         state_key,
         StateRecord(
@@ -27,7 +29,9 @@ def _seed_state(store, state_key: str = "test-state-abc", verifier: str = "test-
     )
 
 
-def _mock_github_token(github_mock, test_settings, *, scope: str = "public_repo,read:user"):
+def _mock_github_token(
+    github_mock, test_settings, *, scope: str = "public_repo,read:user"
+):
     github_mock.post(test_settings.GITHUB_TOKEN_URL).respond(
         200,
         json={"access_token": "gho_callback_test", "scope": scope},
@@ -83,9 +87,7 @@ class TestStartOAuth:
 
 
 class TestCallback:
-    async def test_success_returns_307(
-        self, client, store, github_mock, test_settings
-    ):
+    async def test_success_returns_307(self, client, store, github_mock, test_settings):
         await _seed_state(store)
         _mock_github_token(github_mock, test_settings)
         _mock_github_user(github_mock, test_settings)
