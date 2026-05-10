@@ -115,11 +115,11 @@ class TestSetSessionCookie:
         header = self._get_cookie_header(resp).lower()
         assert "httponly" in header
 
-    def test_samesite_lax(self, test_settings):
+    def test_samesite_strict(self, test_settings):
         resp = Response()
         set_session_cookie(resp, "sess-xyz", test_settings)
         header = self._get_cookie_header(resp).lower()
-        assert "samesite=lax" in header
+        assert "samesite=strict" in header
 
     def test_not_secure_in_dev(self, test_settings):
         # ENV=dev → Secure flag must be absent.
