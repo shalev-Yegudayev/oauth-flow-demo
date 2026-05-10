@@ -43,7 +43,8 @@ class SessionStore:
         )
 
     async def pop_state(self, state: str) -> StateRecord | None:
-        raw: bytes | None = await self._r.eval(_POP_LUA, 1, f"{_STATE_PREFIX}{state}")
+        key = f"{_STATE_PREFIX}{state}"
+        raw: bytes | None = await self._r.eval(_POP_LUA, 1, key)
         if raw is None:
             return None
         return StateRecord.model_validate_json(raw.decode("utf-8"))
@@ -52,32 +53,32 @@ class SessionStore:
     # Session (auth lifecycle)
     # ------------------------------------------------------------------
 
-    async def create_session(self, record: SessionRecord) -> None:
+    async def _write_session(self, record: SessionRecord) -> None:
         await self._r.setex(
             f"{_SESSION_PREFIX}{record.session_id}",
             self._session_ttl,
             record.model_dump_json(),
         )
 
+    async def create_session(self, record: SessionRecord) -> None:
+        await self._write_session(record)
+
+    async def update_session(self, record: SessionRecord) -> None:
+        await self._write_session(record)
+
     async def get_session(self, session_id: str) -> SessionRecord | None:
-        raw: bytes | None = await self._r.get(f"{_SESSION_PREFIX}{session_id}")
+        key = f"{_SESSION_PREFIX}{session_id}"
+        raw: bytes | None = await self._r.get(key)
         if raw is None:
             return None
         record = SessionRecord.model_validate_json(raw.decode("utf-8"))
-        # Hard ceiling: reject sessions older than 12 h regardless of sliding TTL.
+        # Hard ceiling: reject sessions older than 12 h regardless of TTL.
         if datetime.now(UTC) - record.created_at > _12_HOURS:
             await self.delete_session(session_id)
             return None
-        # Sliding TTL: each access resets the expiry so active sessions stay alive.
-        await self._r.expire(f"{_SESSION_PREFIX}{session_id}", self._session_ttl)
+        # Sliding TTL: each read resets the expiry for active sessions.
+        await self._r.expire(key, self._session_ttl)
         return record
-
-    async def update_session(self, record: SessionRecord) -> None:
-        await self._r.setex(
-            f"{_SESSION_PREFIX}{record.session_id}",
-            self._session_ttl,
-            record.model_dump_json(),
-        )
 
     async def delete_session(self, session_id: str) -> None:
         await self._r.delete(f"{_SESSION_PREFIX}{session_id}")
@@ -86,8 +87,11 @@ class SessionStore:
     # User profile cache (internal service data — independent TTL)
     # ------------------------------------------------------------------
 
-    async def get_user_profile(self, provider_user_id: str) -> UserProfileRecord | None:
-        raw: bytes | None = await self._r.get(f"{_PROFILE_PREFIX}{provider_user_id}")
+    async def get_user_profile(
+        self, provider_user_id: str
+    ) -> UserProfileRecord | None:
+        key = f"{_PROFILE_PREFIX}{provider_user_id}"
+        raw: bytes | None = await self._r.get(key)
         if raw is None:
             return None
         return UserProfileRecord.model_validate_json(raw.decode("utf-8"))

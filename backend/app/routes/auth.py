@@ -1,19 +1,18 @@
-import base64
 import logging
-import os
 from datetime import UTC, datetime
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
-from app.core.crypto import InvalidToken, TokenCipher
-from app.core.exceptions import OAuthError
+from app.core.crypto import TokenCipher
 from app.core.rate_limit import limiter
 from app.core.security import (
     clear_session_cookie,
     compute_code_challenge,
     generate_code_verifier,
+    generate_session_id,
     generate_state,
     set_session_cookie,
 )
@@ -35,11 +34,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _generate_session_id() -> str:
-    return (
-        base64.urlsafe_b64encode(os.urandom(32))
-        .rstrip(b"=")
-        .decode("ascii")
+def _login_redirect(origin: str, error: str) -> RedirectResponse:
+    return RedirectResponse(
+        url=f"{origin}/login?{urlencode({'error': error})}",
+        status_code=302,
     )
 
 
@@ -83,42 +81,31 @@ async def oauth_callback(
     error: str = Query(default=None),
 ) -> RedirectResponse:
     if error:
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_ORIGIN}/login?error={error}",
-            status_code=302,
-        )
+        return _login_redirect(settings.FRONTEND_ORIGIN, error)
     if not code or not state:
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_ORIGIN}/login?error=missing_code_or_state",
-            status_code=302,
+        return _login_redirect(
+            settings.FRONTEND_ORIGIN, "missing_code_or_state"
         )
 
     state_record = await store.pop_state(state)
     if state_record is None:
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_ORIGIN}/login?error=invalid_or_expired_state",
-            status_code=302,
+        return _login_redirect(
+            settings.FRONTEND_ORIGIN, "invalid_or_expired_state"
         )
     if state_record.provider != provider:
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_ORIGIN}/login?error=provider_mismatch",
-            status_code=302,
-        )
+        return _login_redirect(settings.FRONTEND_ORIGIN, "provider_mismatch")
 
     token = await oauth_provider.exchange_code(
         code, state_record.code_verifier
     )
 
-    granted = set[str](token.scope.split())
-    if not set[str](oauth_provider.required_scopes).issubset(granted):
-        return RedirectResponse(
-            url=f"{settings.FRONTEND_ORIGIN}/login?error=insufficient_scope",
-            status_code=302,
-        )
+    granted = set(token.scope.split())
+    if not set(oauth_provider.required_scopes).issubset(granted):
+        return _login_redirect(settings.FRONTEND_ORIGIN, "insufficient_scope")
 
     user_id = await oauth_provider.fetch_user_id(token.value)
 
-    session_id = _generate_session_id()
+    session_id = generate_session_id()
     session = SessionRecord(
         session_id=session_id,
         provider=provider,
@@ -162,7 +149,7 @@ async def logout(
             plaintext = cipher.decrypt(session.encrypted_access_token)
             provider = get_provider(session.provider, provider_http, settings)
             await provider.revoke_token(plaintext)
-        except (InvalidToken, Exception) as exc:
+        except Exception as exc:
             logger.warning(
                 "token revocation failed session_id=%s reason=%s",
                 session_id,

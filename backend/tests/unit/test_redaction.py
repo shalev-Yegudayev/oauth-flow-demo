@@ -1,11 +1,11 @@
-"""Tests for the _redact helper in app/core/exceptions.py."""
+import logging
 
 import pytest
 
-from app.core.exceptions import _redact
+from app.core.security import REDACT_RE, RedactingFilter
 
 
-class TestRedactSensitiveNames:
+class TestRedactReSensitiveNames:
     @pytest.mark.parametrize(
         "name",
         [
@@ -31,11 +31,11 @@ class TestRedactSensitiveNames:
             "x-api-key",
         ],
     )
-    def test_sensitive_name_is_redacted(self, name):
-        assert _redact(name) == "[REDACTED]"
+    def test_sensitive_name_matches(self, name):
+        assert REDACT_RE.search(name) is not None
 
 
-class TestRedactSafeNames:
+class TestRedactReSafeNames:
     @pytest.mark.parametrize(
         "name",
         [
@@ -46,7 +46,7 @@ class TestRedactSafeNames:
             "scope",
             "state",
             "redirect_uri",
-            "code",           # the auth code itself is not matched (no keyword hit)
+            "code",
             "grant_type",
             "client_id",
             "expires_in",
@@ -55,28 +55,44 @@ class TestRedactSafeNames:
             "tier",
         ],
     )
-    def test_safe_name_is_passed_through(self, name):
-        assert _redact(name) == name
+    def test_safe_name_does_not_match(self, name):
+        assert REDACT_RE.search(name) is None
 
 
-class TestRedactCaseSensitivity:
-    def test_mixed_case_token(self):
-        assert _redact("Token") == "[REDACTED]"
+class TestRedactingFilter:
+    def _make_record(self, msg: str) -> logging.LogRecord:
+        record = logging.LogRecord(
+            name="test", level=logging.INFO,
+            pathname="", lineno=0, msg=msg,
+            args=(), exc_info=None,
+        )
+        return record
 
-    def test_mixed_case_authorization(self):
-        assert _redact("Authorization") == "[REDACTED]"
+    def test_sensitive_keyword_in_message_is_replaced(self):
+        f = RedactingFilter()
+        record = self._make_record("exchanging token abc123")
+        f.filter(record)
+        assert record.msg == "exchanging [REDACTED] abc123"
 
-    def test_mixed_case_secret(self):
-        assert _redact("Client_Secret") == "[REDACTED]"
+    def test_safe_message_is_unchanged(self):
+        f = RedactingFilter()
+        record = self._make_record("user logged in as alice")
+        f.filter(record)
+        assert record.msg == "user logged in as alice"
 
+    def test_multiple_sensitive_keywords_all_replaced(self):
+        f = RedactingFilter()
+        record = self._make_record("token exchanged, secret stored")
+        f.filter(record)
+        assert record.msg == "[REDACTED] exchanged, [REDACTED] stored"
 
-class TestRedactSubstringMatching:
-    def test_token_as_substring(self):
-        # "access_token" contains "token" → must be redacted.
-        assert _redact("access_token") == "[REDACTED]"
+    def test_filter_always_returns_true(self):
+        f = RedactingFilter()
+        record = self._make_record("token xyz")
+        assert f.filter(record) is True
 
-    def test_secret_as_substring(self):
-        assert _redact("github_client_secret") == "[REDACTED]"
-
-    def test_refresh_as_substring(self):
-        assert _redact("refresh_token_value") == "[REDACTED]"
+    def test_case_insensitive_replacement(self):
+        f = RedactingFilter()
+        record = self._make_record("Authorization header present")
+        f.filter(record)
+        assert record.msg == "[REDACTED] header present"

@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 import os
 import re
 
@@ -7,13 +8,21 @@ from fastapi import Response
 
 from config import Settings
 
-_REDACT_RE = re.compile(
+REDACT_RE = re.compile(
     r"(?i)(token|secret|authorization|api[-_]?key|code_verifier|refresh)"
 )
 
 
-def _redact(value: str) -> str:
-    return "[REDACTED]" if _REDACT_RE.search(value) else value
+class RedactingFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = REDACT_RE.sub("[REDACTED]", str(record.msg))
+        return True
+
+
+def generate_session_id() -> str:
+    return (
+        base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("ascii")
+    )
 
 
 def generate_state() -> str:

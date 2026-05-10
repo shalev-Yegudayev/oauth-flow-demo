@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GITHUB_AUTHORIZE_URL: str = "https://github.com/login/oauth/authorize"
     GITHUB_TOKEN_URL: str = "https://github.com/login/oauth/access_token"
     GITHUB_API_BASE: str = "https://api.github.com"
+    GITHUB_REPOS_PER_PAGE: int = 100
     INTERNAL_SERVICE_URL: str
     INTERNAL_API_KEY: SecretStr
     INTERNAL_SERVICE_MOCK: bool = True

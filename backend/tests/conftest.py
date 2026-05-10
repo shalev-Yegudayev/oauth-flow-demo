@@ -26,6 +26,7 @@ TEST_SETTINGS_KWARGS: dict = {
     "GITHUB_AUTHORIZE_URL": "https://github-mock.internal/login/oauth/authorize",
     "GITHUB_TOKEN_URL": "https://github-mock.internal/login/oauth/access_token",
     "GITHUB_API_BASE": "https://github-mock.internal/api",
+    "GITHUB_REPOS_PER_PAGE": 100,
     "INTERNAL_SERVICE_URL": "http://internal-mock.internal",
     "INTERNAL_API_KEY": "test-internal-key",
     "INTERNAL_SERVICE_MOCK": True,

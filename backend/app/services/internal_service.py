@@ -1,5 +1,6 @@
 import random
 from typing import Literal
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel
@@ -8,8 +9,12 @@ from app.core.exceptions import InternalServiceError
 from app.models.session import UserProfileRecord
 from config import Settings
 
-_FIRST_NAMES = ["Alex", "Jordan", "Riley", "Sam", "Taylor", "Morgan", "Casey", "Jamie"]
-_LAST_NAMES = ["Chen", "Patel", "Garcia", "Smith", "Cohen", "Nguyen", "Khan", "Silva"]
+_FIRST_NAMES = [
+    "Alex", "Jordan", "Riley", "Sam", "Taylor", "Morgan", "Casey", "Jamie"
+]
+_LAST_NAMES = [
+    "Chen", "Patel", "Garcia", "Smith", "Cohen", "Nguyen", "Khan", "Silva"
+]
 _ROLES = ["developer", "admin", "analyst", "viewer"]
 
 
@@ -28,7 +33,9 @@ def mock_transport_handler(request: httpx.Request) -> httpx.Response:
         request.headers.get("X-Internal-API-Key")
         != settings.INTERNAL_API_KEY.get_secret_value()
     ):
-        return httpx.Response(401, json={"error": "missing_or_invalid_api_key"})
+        return httpx.Response(
+            401, json={"error": "missing_or_invalid_api_key"}
+        )
     user_id = request.url.path.rsplit("/", 1)[-1]
     rng = random.Random(user_id)
     return httpx.Response(
@@ -48,10 +55,10 @@ class InternalServiceClient:
         self._settings = settings
 
     async def get_user(self, provider_user_id: str) -> UserProfileRecord:
-        url = f"{self._settings.INTERNAL_SERVICE_URL}/api/users/{provider_user_id}"
-        headers = {
-            "X-Internal-API-Key": (self._settings.INTERNAL_API_KEY.get_secret_value())
-        }
+        safe_id = quote(provider_user_id, safe="")
+        url = f"{self._settings.INTERNAL_SERVICE_URL}/api/users/{safe_id}"
+        api_key = self._settings.INTERNAL_API_KEY.get_secret_value()
+        headers = {"X-Internal-API-Key": api_key}
         try:
             resp = await self._http.get(url, headers=headers, timeout=5.0)
         except httpx.RequestError as exc:

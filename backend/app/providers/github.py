@@ -4,12 +4,13 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel
 
-from app.core.exceptions import ProviderError, TokenRefreshError
+from app.core.exceptions import OAuthError, ProviderError, TokenRefreshError
 from app.providers.base import AccessToken, OAuthProvider
 
 logger = logging.getLogger(__name__)
 
 _MAX_REPO_PAGES = 5
+_REPOS_SORT = "updated"
 
 
 class Repo(BaseModel):
@@ -35,7 +36,9 @@ class GithubProvider(OAuthProvider):
         )
         return f"{self._settings.GITHUB_AUTHORIZE_URL}?{params}"
 
-    async def exchange_code(self, code: str, code_verifier: str) -> AccessToken:
+    async def exchange_code(
+        self, code: str, code_verifier: str
+    ) -> AccessToken:
         return await self._post_token(
             data={
                 "code": code,
@@ -48,19 +51,24 @@ class GithubProvider(OAuthProvider):
 
     async def refresh_token(self, refresh_token: str) -> AccessToken:
         return await self._post_token(
-            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
             timeout=8.0,
             exc=TokenRefreshError,
         )
 
     async def _post_token(
-        self, data: dict, timeout: float, exc: type[Exception]
+        self, data: dict, timeout: float, exc: type[OAuthError]
     ) -> AccessToken:
         resp = await self._http.post(
             self._settings.GITHUB_TOKEN_URL,
             data={
                 "client_id": self._settings.GITHUB_CLIENT_ID,
-                "client_secret": self._settings.GITHUB_CLIENT_SECRET.get_secret_value(),
+                "client_secret": (
+                    self._settings.GITHUB_CLIENT_SECRET.get_secret_value()
+                ),
                 **data,
             },
             headers={"Accept": "application/json"},
@@ -83,11 +91,18 @@ class GithubProvider(OAuthProvider):
         )
         if resp.status_code != 200:
             raise ProviderError(f"fetch_user_failed:{resp.status_code}")
-        return str(resp.json()["id"])
+        try:
+            return str(resp.json()["id"])
+        except (KeyError, TypeError) as e:
+            raise ProviderError("unexpected_user_payload") from e
 
     async def revoke_token(self, token: str) -> None:
+        app_url = (
+            f"{self._settings.GITHUB_API_BASE}"
+            f"/applications/{self._settings.GITHUB_CLIENT_ID}/token"
+        )
         resp = await self._http.delete(
-            f"{self._settings.GITHUB_API_BASE}/applications/{self._settings.GITHUB_CLIENT_ID}/token",
+            app_url,
             auth=(
                 self._settings.GITHUB_CLIENT_ID,
                 self._settings.GITHUB_CLIENT_SECRET.get_secret_value(),
@@ -97,7 +112,8 @@ class GithubProvider(OAuthProvider):
         )
         if resp.status_code not in (204, 404):
             logger.warning(
-                "token revocation returned unexpected status=%d", resp.status_code
+                "token revocation returned unexpected status=%d",
+                resp.status_code,
             )
 
     async def fetch_profile_sections(self, token: str) -> dict:
@@ -105,13 +121,14 @@ class GithubProvider(OAuthProvider):
         return {"repositories": [r.model_dump() for r in repos]}
 
     async def _fetch_repositories(self, token: str) -> list[Repo]:
+        per_page = self._settings.GITHUB_REPOS_PER_PAGE
         repos: list[Repo] = []
         url: str | None = (
-            f"{self._settings.GITHUB_API_BASE}/user/repos?visibility=public&per_page=100&sort=updated"
+            f"{self._settings.GITHUB_API_BASE}/user/repos"
+            f"?visibility=public&per_page={per_page}&sort={_REPOS_SORT}"
         )
-        for _ in range(_MAX_REPO_PAGES):
-            if not url:
-                break
+        pages_fetched = 0
+        while url and pages_fetched < _MAX_REPO_PAGES:
             resp = await self._http.get(
                 url,
                 headers={"Authorization": f"Bearer {token}"},
@@ -119,15 +136,19 @@ class GithubProvider(OAuthProvider):
             )
             if resp.status_code != 200:
                 raise ProviderError(f"fetch_repos_failed:{resp.status_code}")
-            repos.extend(
-                Repo(
-                    name=item["name"],
-                    description=item.get("description"),
-                    stars=item["stargazers_count"],
+            try:
+                repos.extend(
+                    Repo(
+                        name=item["name"],
+                        description=item.get("description"),
+                        stars=item["stargazers_count"],
+                    )
+                    for item in resp.json()
                 )
-                for item in resp.json()
-            )
+            except (KeyError, TypeError) as e:
+                raise ProviderError("unexpected_repo_payload") from e
             url = _next_link(resp.headers.get("Link", ""))
+            pages_fetched += 1
         return repos
 
     @staticmethod

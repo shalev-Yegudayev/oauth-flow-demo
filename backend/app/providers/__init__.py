@@ -1,6 +1,6 @@
 import httpx
-from fastapi import HTTPException
 
+from app.core.exceptions import OAuthError
 from app.providers.base import OAuthProvider
 from app.providers.github import GithubProvider
 from config import Settings
@@ -11,8 +11,10 @@ _REGISTRY: dict[str, type] = {
 }
 
 
-def get_provider(name: str, http: httpx.AsyncClient, settings: Settings) -> OAuthProvider:
+def get_provider(
+    name: str, http: httpx.AsyncClient, settings: Settings
+) -> OAuthProvider:
     cls = _REGISTRY.get(name)
     if cls is None:
-        raise HTTPException(status_code=404, detail=f"unknown_provider:{name}")
+        raise OAuthError(f"unknown_provider:{name}", status_code=404)
     return cls(http, settings)

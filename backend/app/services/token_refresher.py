@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import redis.asyncio as aioredis
 from fastapi import HTTPException
 
@@ -9,6 +12,7 @@ from app.core.crypto import InvalidToken, TokenCipher
 from app.core.exceptions import TokenRefreshError
 from app.models.session import SessionRecord
 from app.services.session_store import SessionStore
+from app.providers.base import OAuthProvider
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,7 @@ class TokenRefresher:
         redis: aioredis.Redis,
         store: SessionStore,
         cipher: TokenCipher,
-        provider,  # OAuthProvider — typed in deps.py to avoid circular import
+        provider: OAuthProvider,
     ) -> None:
         self._r = redis
         self._store = store
@@ -38,7 +42,7 @@ class TokenRefresher:
         # Token still has enough runway — skip refresh until inside the window.
         if record.token_expires_at - datetime.now(UTC) > _REFRESH_WINDOW:
             return record
-        # Token is expiring but no refresh token was issued; session is unrecoverable.
+        # Token is expiring but no refresh token was issued; unrecoverable.
         if record.encrypted_refresh_token is None:
             await self._store.delete_session(record.session_id)
             raise TokenRefreshError("no_refresh_token")
@@ -66,7 +70,7 @@ class TokenRefresher:
                 self._provider.refresh_token(plaintext_refresh),
                 timeout=8.0,
             )
-        except (TimeoutError, Exception) as exc:
+        except (asyncio.TimeoutError, httpx.RequestError, TokenRefreshError) as exc:
             await self._store.delete_session(record.session_id)
             raise TokenRefreshError("refresh_failed") from exc
 
@@ -86,19 +90,19 @@ class TokenRefresher:
         return updated
 
     async def _wait_for_refresh(self, record: SessionRecord) -> SessionRecord:
-        # Another coroutine holds the refresh lock; poll until it finishes or we time out.
+        # Another coroutine holds the refresh lock; poll until done or timeout.
         elapsed = 0.0
         while elapsed < _LOCK_POLL_TIMEOUT:
             await asyncio.sleep(_LOCK_POLL_INTERVAL)
             elapsed += _LOCK_POLL_INTERVAL
             refreshed = await self._store.get_session(record.session_id)
 
-            # Lock holder deleted the session on failure; propagate as a refresh error.
+            # Lock holder deleted the session on failure; propagate the error.
             if refreshed is None:
                 raise TokenRefreshError("session_lost_during_refresh")
-            # Expiry changed — the lock holder completed the refresh successfully.
+            # Expiry changed — lock holder completed the refresh successfully.
             if refreshed.token_expires_at != record.token_expires_at:
                 return refreshed
 
-        # Lock holder didn't finish within the timeout; tell the client to retry.
+        # Lock holder didn't finish within the timeout; tell client to retry.
         raise HTTPException(status_code=503, headers={"Retry-After": "1"})

@@ -2,7 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from app.core.crypto import TokenCipher
-from app.core.rate_limit import _get_session_key, limiter
+from app.core.rate_limit import get_session_key, limiter
 from app.models.profile import UnifiedProfile, UserSummary
 from app.models.session import SessionRecord, UserProfileRecord
 from app.providers import get_provider
@@ -34,7 +34,7 @@ async def get_or_fetch_user_profile(
 
 
 @router.get("/profile", response_model=UnifiedProfile)
-@limiter.limit("60/minute", key_func=_get_session_key)
+@limiter.limit("60/minute", key_func=get_session_key)
 async def get_profile(
     request: Request,
     session: SessionRecord = Depends(get_authenticated_session),
