@@ -22,7 +22,7 @@ Provider-agnostic OAuth microservice (Vorlon home assignment). Authenticates a u
 | Concern         | Implementation                                                                  |
 | --------------- | ------------------------------------------------------------------------------- |
 | Token storage   | Fernet-encrypted at rest with key-rotation fallback list (`app/core/crypto.py`) |
-| Session cookie  | `HttpOnly`; `SameSite=Lax` in dev, `SameSite=None; Secure` in prod (cross-site deploy) |
+| Session cookie  | `HttpOnly`, `SameSite=Lax`, `Secure` in production — opaque session id only     |
 | CSRF            | Per-flow `state` in Redis with short TTL, verified on callback                  |
 | OAuth hardening | PKCE S256 on the authorization-code flow                                        |
 | Race safety     | Lua scripts for atomic state/session writes; Redis lock around token refresh    |
@@ -120,22 +120,22 @@ Frontend runs on `http://localhost:5173`.
 
 ### Environment variables (`backend/.env`)
 
-| Variable                | Description                                                                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITHUB_CLIENT_ID`      | OAuth App client id                                                                                                                                |
-| `GITHUB_CLIENT_SECRET`  | OAuth App client secret                                                                                                                            |
-| `GITHUB_REDIRECT_URI`   | `http://localhost:8000/auth/github/callback`                                                                                                       |
-| `INTERNAL_SERVICE_URL`  | Base URL of the (mock) internal service                                                                                                            |
-| `INTERNAL_API_KEY`      | API key for the internal service                                                                                                                   |
-| `INTERNAL_SERVICE_MOCK` | `true` to use the in-process mock transport                                                                                                        |
-| `REDIS_URL`             | `redis://localhost:6379/0`                                                                                                                         |
-| `SESSION_SECRET`        | 32-byte url-safe base64 key for Fernet (generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) |
-| `FRONTEND_ORIGIN`       | `http://localhost:5173` (CORS allowlist)                                                                                                           |
-| `POST_LOGIN_REDIRECT`   | URL to redirect to after successful callback                                                                                                       |
-| `ENV`                   | `dev` or `prod`                                                                                                                                    |
-| `SESSION_TTL_SECONDS`   | Session sliding expiry (default `3600`)                                                                                                            |
-| `STATE_TTL_SECONDS`     | OAuth state TTL (default `300`)                                                                                                                    |
-| `USER_PROFILE_TTL_SECONDS` | Internal-service profile cache TTL (default `3600`)                                                                                             |
+| Variable                   | Description                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_CLIENT_ID`         | OAuth App client id                                                                                                                                |
+| `GITHUB_CLIENT_SECRET`     | OAuth App client secret                                                                                                                            |
+| `GITHUB_REDIRECT_URI`      | `http://localhost:8000/auth/github/callback`                                                                                                       |
+| `INTERNAL_SERVICE_URL`     | Base URL of the (mock) internal service                                                                                                            |
+| `INTERNAL_API_KEY`         | API key for the internal service                                                                                                                   |
+| `INTERNAL_SERVICE_MOCK`    | `true` to use the in-process mock transport                                                                                                        |
+| `REDIS_URL`                | `redis://localhost:6379/0`                                                                                                                         |
+| `SESSION_SECRET`           | 32-byte url-safe base64 key for Fernet (generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) |
+| `FRONTEND_ORIGIN`          | `http://localhost:5173` (CORS allowlist)                                                                                                           |
+| `POST_LOGIN_REDIRECT`      | URL to redirect to after successful callback                                                                                                       |
+| `ENV`                      | `dev` or `production`                                                                                                                              |
+| `SESSION_TTL_SECONDS`      | Session sliding expiry (default `3600`)                                                                                                            |
+| `STATE_TTL_SECONDS`        | OAuth state TTL (default `300`)                                                                                                                    |
+| `USER_PROFILE_TTL_SECONDS` | Internal-service profile cache TTL (default `3600`)                                                                                                |
 
 ---
 
@@ -159,12 +159,12 @@ Errors are returned as structured JSON via the `OAuthError` / `ProviderError` ha
 
 Public session artifacts recorded during the build, in chronological order:
 
-| # | Phase | Link |
-| - | --- | --- |
-| 1 | Setup & backend design | [docs/Vorlon home assignment phase one - setup.md](docs/Vorlon%20home%20assignment%20phase%20one%20-%20setup.md) |
-| 2 | Backend implementation | https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA |
-| 3 | Frontend implementation | https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf |
-| 4 | Backend CR & security analysis | https://claude.ai/code/session_01BRnpXzz4Pu4BeLRGnUwNZy |
+| #   | Phase                          | Link                                                                                                             |
+| --- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| 1   | Setup & backend design         | [docs/Vorlon home assignment phase one - setup.md](docs/Vorlon%20home%20assignment%20phase%20one%20-%20setup.md) |
+| 2   | Backend implementation         | https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA                                                          |
+| 3   | Frontend implementation        | https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf                                                          |
+| 4   | Backend CR & security analysis | https://claude.ai/code/session_01BRnpXzz4Pu4BeLRGnUwNZy                                                          |
 
 Together these cover the analysis, planning, implementation, and review phases.
 
@@ -172,10 +172,28 @@ Together these cover the analysis, planning, implementation, and review phases.
 
 ## What I Would Add With More Time
 
-**Features.** Second provider (Google/Microsoft) to exercise the strategy abstraction; real internal service with contract tests; active-session management UI backed by a `sessions:{user_id}` index; multi-provider account linking; revocation webhooks.
+**Features**
+- Second provider (Google/Microsoft) to exercise the strategy abstraction
+- Real internal service with contract tests
+- Active-session management UI backed by a `sessions:{user_id}` index
+- Multi-provider account linking
+- Revocation webhooks
 
-**Security.** Refresh-token rotation with replay detection; mTLS or signed JWTs for the internal service instead of a static API key; suspicious-session detection (IP/UA/geo changes); automated `SESSION_SECRET` rotation pipeline.
+**Security**
+- Explicit redirect URI validation — store the provider's expected `redirect_uri` in the state record; validate on callback that the incoming parameter matches, preventing accidental misconfiguration
+- Refresh-token rotation with replay detection
+- mTLS or signed JWTs for the internal service (instead of a static API key)
+- Suspicious-session detection (IP/UA/geo changes)
+- Automated `SESSION_SECRET` rotation pipeline
 
-**Observability.** Structured JSON logs with per-request correlation ids; OpenTelemetry traces across the full flow; per-provider Prometheus metrics (refresh success, callback p95, error rates); append-only audit log; hardened prod Redis (ACLs, TLS, secret manager).
+**Observability**
+- Structured JSON logs with per-request correlation IDs
+- OpenTelemetry traces across the full flow
+- Per-provider Prometheus metrics (refresh success, callback p95, error rates)
+- Append-only audit log
+- Hardened prod Redis (ACLs, TLS, secret manager)
 
-**DX.** GitHub Actions CI (lint, `mypy --strict`, tests, compose-based integration job); Playwright E2E covering negative paths; a real design system (shadcn/Radix) and frontend test coverage (Vitest + RTL).
+**Developer Experience**
+- GitHub Actions CI (lint, `mypy --strict`, tests, compose-based integration job)
+- Playwright E2E covering negative paths
+- Real design system (shadcn/Radix) and frontend test coverage (Vitest + RTL)

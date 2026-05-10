@@ -115,11 +115,23 @@ class TestSetSessionCookie:
         header = self._get_cookie_header(resp).lower()
         assert "httponly" in header
 
-    def test_samesite_strict(self, test_settings):
+    def test_samesite_lax_in_dev(self, test_settings):
+        assert test_settings.ENV == "dev"
         resp = Response()
         set_session_cookie(resp, "sess-xyz", test_settings)
         header = self._get_cookie_header(resp).lower()
-        assert "samesite=strict" in header
+        assert "samesite=lax" in header
+
+    def test_samesite_lax_in_prod(self, test_settings):
+        from config import Settings
+
+        prod_settings = Settings.model_validate(
+            {**test_settings.model_dump(), "ENV": "production"}
+        )
+        resp = Response()
+        set_session_cookie(resp, "sess-xyz", prod_settings)
+        header = self._get_cookie_header(resp).lower()
+        assert "samesite=lax" in header
 
     def test_not_secure_in_dev(self, test_settings):
         # ENV=dev → Secure flag must be absent.
