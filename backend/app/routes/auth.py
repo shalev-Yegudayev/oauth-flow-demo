@@ -83,15 +83,21 @@ async def oauth_callback(
     if error:
         return _login_redirect(settings.FRONTEND_ORIGIN, error)
     if not code or not state:
-        return _login_redirect(settings.FRONTEND_ORIGIN, "missing_code_or_state")
+        return _login_redirect(
+            settings.FRONTEND_ORIGIN, "missing_code_or_state"
+        )
 
     state_record = await store.pop_state(state)
     if state_record is None:
-        return _login_redirect(settings.FRONTEND_ORIGIN, "invalid_or_expired_state")
+        return _login_redirect(
+            settings.FRONTEND_ORIGIN, "invalid_or_expired_state"
+        )
     if state_record.provider != provider:
         return _login_redirect(settings.FRONTEND_ORIGIN, "provider_mismatch")
 
-    token = await oauth_provider.exchange_code(code, state_record.code_verifier)
+    token = await oauth_provider.exchange_code(
+        code, state_record.code_verifier
+    )
 
     granted = set(token.scope.split())
     if not set(oauth_provider.required_scopes).issubset(granted):
@@ -106,7 +112,9 @@ async def oauth_callback(
         provider_user_id=user_id,
         encrypted_access_token=cipher.encrypt(token.value),
         encrypted_refresh_token=(
-            cipher.encrypt(token.refresh_token) if token.refresh_token else None
+            cipher.encrypt(token.refresh_token)
+            if token.refresh_token
+            else None
         ),
         token_expires_at=token.expires_at,
         scope=token.scope,
@@ -115,14 +123,38 @@ async def oauth_callback(
     )
     await store.create_session(session)
 
-    response = RedirectResponse(url=settings.POST_LOGIN_REDIRECT, status_code=307)
+    response = RedirectResponse(
+        url=settings.POST_LOGIN_REDIRECT, status_code=307
+    )
     set_session_cookie(response, session_id, settings)
+    return response
+
+
+async def _terminate_session(
+    session_id: str, store: SessionStore, settings: Settings
+) -> Response:
+    await store.delete_session(session_id)
+    response = Response(status_code=204)
+    clear_session_cookie(response, settings)
     return response
 
 
 @router.post("/logout", status_code=204)
 @limiter.limit("30/minute")
 async def logout(
+    request: Request,
+    store: SessionStore = Depends(get_session_store),
+    settings: Settings = Depends(get_settings_dep),
+) -> Response:
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        return Response(status_code=204)
+    return await _terminate_session(session_id, store, settings)
+
+
+@router.delete("/account", status_code=204)
+@limiter.limit("10/minute")
+async def delete_account(
     request: Request,
     store: SessionStore = Depends(get_session_store),
     cipher: TokenCipher = Depends(get_cipher),
@@ -145,8 +177,4 @@ async def logout(
                 session_id,
                 exc,
             )
-        await store.delete_session(session_id)
-
-    response = Response(status_code=204)
-    clear_session_cookie(response, settings)
-    return response
+    return await _terminate_session(session_id, store, settings)

@@ -2,6 +2,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { UnauthorizedError } from '@/lib/errors';
 import { ProfileHeader } from '@/components/ProfileHeader';
 import { LogoutButton } from '@/components/LogoutButton';
+import { DeleteAccountButton } from '@/components/DeleteAccountButton';
 import { ProfileSkeleton } from '@/components/ProfileSkeleton';
 import { ErrorCard } from '@/components/ErrorCard';
 import { GithubSectionsView } from '@/components/providers/github/GithubSectionsView';
@@ -25,7 +26,10 @@ export function ProfilePage() {
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           {data && <ProfileHeader user={data.user} />}
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            <LogoutButton />
+            <DeleteAccountButton />
+          </div>
         </div>
 
         {isLoading && <ProfileSkeleton />}

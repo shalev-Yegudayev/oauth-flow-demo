@@ -97,9 +97,10 @@ class GithubProvider(OAuthProvider):
     async def revoke_token(self, token: str) -> None:
         app_url = (
             f"{self._settings.GITHUB_API_BASE}"
-            f"/applications/{self._settings.GITHUB_CLIENT_ID}/token"
+            f"/applications/{self._settings.GITHUB_CLIENT_ID}/grant"
         )
-        resp = await self._http.delete(
+        resp = await self._http.request(
+            "DELETE",
             app_url,
             auth=(
                 self._settings.GITHUB_CLIENT_ID,

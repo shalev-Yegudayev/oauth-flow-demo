@@ -109,5 +109,6 @@ GitHub uses **PKCE with S256**; `app/core/security.py` generates the code verifi
 |---|---|---|---|
 | GET | `/auth/{provider}` | 10/min | Redirect to provider authorization URL |
 | GET | `/auth/{provider}/callback` | 20/min | Exchange code, create session, set cookie |
-| POST | `/auth/logout` | 30/min | Revoke token, delete session, clear cookie |
+| POST | `/auth/logout` | 30/min | Delete session, clear cookie (token stays alive on provider) |
+| DELETE | `/auth/account` | 10/min | Revoke token, delete session, clear cookie |
 | GET | `/profile` | 60/min | Return normalized profile (requires session cookie) |
