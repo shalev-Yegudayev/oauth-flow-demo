@@ -4,6 +4,10 @@ import logging
 import os
 import re
 
+from fastapi import Response
+
+from config import Settings
+
 # Redact credential-shaped keywords from logs (case-insensitive)
 REDACT_RE = re.compile(
     r"(?i)(token|secret|authorization|api[-_]?key|code_verifier|refresh)"
