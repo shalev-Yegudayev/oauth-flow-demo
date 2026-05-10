@@ -70,7 +70,7 @@ class TokenRefresher:
                 self._provider.refresh_token(plaintext_refresh),
                 timeout=8.0,
             )
-        except (TimeoutError, httpx.RequestError, TokenRefreshError) as exc:
+        except Exception as exc:
             await self._store.delete_session(record.session_id)
             raise TokenRefreshError("refresh_failed") from exc
 
