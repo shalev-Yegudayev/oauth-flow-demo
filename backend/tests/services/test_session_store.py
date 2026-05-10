@@ -208,36 +208,66 @@ class TestSlidingTtl:
 class TestUserProfileCache:
     async def test_set_and_get_profile(self, session_store):
         profile = UserProfileRecord(
+            provider="github",
             provider_user_id="uid-001",
             user_name="Alex Chen",
-            tier="Pro",
+            license="Pro",
             role="developer",
         )
         await session_store.set_user_profile(profile)
 
-        result = await session_store.get_user_profile("uid-001")
+        result = await session_store.get_user_profile("github", "uid-001")
         assert result is not None
         assert result.user_name == "Alex Chen"
-        assert result.tier == "Pro"
+        assert result.license == "Pro"
 
     async def test_get_missing_profile_returns_none(self, session_store):
-        result = await session_store.get_user_profile("uid-missing")
+        result = await session_store.get_user_profile("github", "uid-missing")
         assert result is None
 
     async def test_profile_overwrite(self, session_store):
         profile = UserProfileRecord(
+            provider="github",
             provider_user_id="uid-002",
             user_name="Old Name",
-            tier="Basic",
+            license="Basic",
             role="viewer",
         )
         await session_store.set_user_profile(profile)
 
         updated = UserProfileRecord(
-            provider_user_id="uid-002", user_name="New Name", tier="Pro", role="admin"
+            provider="github",
+            provider_user_id="uid-002",
+            user_name="New Name",
+            license="Pro",
+            role="admin",
         )
         await session_store.set_user_profile(updated)
 
-        result = await session_store.get_user_profile("uid-002")
+        result = await session_store.get_user_profile("github", "uid-002")
         assert result.user_name == "New Name"
-        assert result.tier == "Pro"
+        assert result.license == "Pro"
+
+    async def test_cache_namespaced_by_provider(self, session_store):
+        """Same provider_user_id under different providers must not collide."""
+        github_profile = UserProfileRecord(
+            provider="github",
+            provider_user_id="42",
+            user_name="GitHub User",
+            license="Pro",
+            role="developer",
+        )
+        google_profile = UserProfileRecord(
+            provider="google",
+            provider_user_id="42",
+            user_name="Google User",
+            license="Basic",
+            role="viewer",
+        )
+        await session_store.set_user_profile(github_profile)
+        await session_store.set_user_profile(google_profile)
+
+        gh = await session_store.get_user_profile("github", "42")
+        gg = await session_store.get_user_profile("google", "42")
+        assert gh.user_name == "GitHub User"
+        assert gg.user_name == "Google User"

@@ -53,6 +53,7 @@ class TestRedactReSafeNames:
             "created_at",
             "role",
             "tier",
+            "license",
         ],
     )
     def test_safe_name_does_not_match(self, name):

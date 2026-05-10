@@ -48,7 +48,7 @@ class InternalServiceClient:
         self._http = http
         self._settings = settings
 
-    async def get_user(self, provider_user_id: str) -> UserProfileRecord:
+    async def get_user(self, provider: str, provider_user_id: str) -> UserProfileRecord:
         safe_id = quote(provider_user_id, safe="")
         url = f"{self._settings.INTERNAL_SERVICE_URL}/api/users/{safe_id}"
         api_key = self._settings.INTERNAL_API_KEY.get_secret_value()
@@ -67,8 +67,9 @@ class InternalServiceClient:
             raise InternalServiceError(502) from exc
 
         return UserProfileRecord(
+            provider=provider,
             provider_user_id=provider_user_id,
             user_name=internal.name,
-            tier=internal.license,
+            license=internal.license,
             role=internal.role,
         )

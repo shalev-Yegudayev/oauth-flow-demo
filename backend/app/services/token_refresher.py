@@ -15,10 +15,10 @@ from app.services.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
 
-_REFRESH_WINDOW = timedelta(seconds=60)
+_REFRESH_WINDOW = timedelta(seconds=120)
 _LOCK_TTL = 20
 _LOCK_POLL_INTERVAL = 0.2
-_LOCK_POLL_TIMEOUT = 5.0
+_LOCK_POLL_TIMEOUT = 15.0
 
 
 class TokenRefresher:

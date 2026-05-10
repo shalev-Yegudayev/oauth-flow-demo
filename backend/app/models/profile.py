@@ -9,7 +9,7 @@ class UserSummary(BaseModel):
     id: str
     name: str
     provider: str
-    tier: Literal["Pro", "Basic"]
+    license: Literal["Pro", "Basic"]
     role: str
 
 

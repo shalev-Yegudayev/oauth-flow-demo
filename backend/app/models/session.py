@@ -23,7 +23,8 @@ class SessionRecord(BaseModel):
 
 
 class UserProfileRecord(BaseModel):
+    provider: str
     provider_user_id: str
     user_name: str
-    tier: Literal["Pro", "Basic"]
+    license: Literal["Pro", "Basic"]
     role: str

@@ -1,5 +1,5 @@
 import type { UserSummary } from '@/types/profile';
-import { TierBadge } from './TierBadge';
+import { LicenseBadge } from './LicenseBadge';
 
 export function ProfileHeader({ user }: { user: UserSummary }) {
   return (
@@ -7,7 +7,7 @@ export function ProfileHeader({ user }: { user: UserSummary }) {
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold text-gray-900">{user.name}</h1>
-          <TierBadge tier={user.tier} />
+          <LicenseBadge license={user.license} />
         </div>
         <p className="mt-0.5 text-sm text-gray-500">
           {user.role} · via {user.provider}

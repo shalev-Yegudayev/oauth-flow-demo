@@ -76,7 +76,7 @@ class TestProfileResponse:
         assert user["id"] == "42"
         assert user["provider"] == "github"
         assert "name" in user
-        assert user["tier"] in ("Pro", "Basic")
+        assert user["license"] in ("Pro", "Basic")
         assert "role" in user
 
     async def test_sections_has_repositories_list(
@@ -109,8 +109,9 @@ class TestProfileCache:
         _mock_repos(github_mock, test_settings)
         await authed_client.get("/profile")
 
-        cached = await store.get_user_profile("42")
+        cached = await store.get_user_profile("github", "42")
         assert cached is not None
+        assert cached.provider == "github"
         assert cached.provider_user_id == "42"
 
     async def test_second_call_returns_same_user_data(

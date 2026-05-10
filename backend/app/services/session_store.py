@@ -87,8 +87,10 @@ class SessionStore:
     # User profile cache (internal service data — independent TTL)
     # ------------------------------------------------------------------
 
-    async def get_user_profile(self, provider_user_id: str) -> UserProfileRecord | None:
-        key = f"{_PROFILE_PREFIX}{provider_user_id}"
+    async def get_user_profile(
+        self, provider: str, provider_user_id: str
+    ) -> UserProfileRecord | None:
+        key = f"{_PROFILE_PREFIX}{provider}:{provider_user_id}"
         raw: bytes | None = await self._r.get(key)
         if raw is None:
             return None
@@ -96,7 +98,7 @@ class SessionStore:
 
     async def set_user_profile(self, record: UserProfileRecord) -> None:
         await self._r.setex(
-            f"{_PROFILE_PREFIX}{record.provider_user_id}",
+            f"{_PROFILE_PREFIX}{record.provider}:{record.provider_user_id}",
             self._profile_ttl,
             record.model_dump_json(),
         )

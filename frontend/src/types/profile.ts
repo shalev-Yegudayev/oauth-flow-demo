@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { GithubSectionsSchema } from "./provider-types/github";
 
-export const TierSchema = z.enum(["Pro", "Basic"]);
-export type Tier = z.infer<typeof TierSchema>;
+export const LicenseSchema = z.enum(["Pro", "Basic"]);
+export type License = z.infer<typeof LicenseSchema>;
 
 const UserSummaryBaseSchema = z.object({
   id: z.string(),
   name: z.string(),
-  tier: TierSchema,
+  license: LicenseSchema,
   role: z.string(),
 });
 

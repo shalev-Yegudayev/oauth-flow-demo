@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 
 import httpx
 import redis.asyncio as aioredis
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.crypto import TokenCipher
 from app.core.exceptions import OAuthError
@@ -59,6 +60,42 @@ async def lifespan(app: FastAPI):
     await app.state.internal_http.aclose()
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach defensive headers to every response.
+
+    The backend is API-only, but these headers are cheap insurance against
+    a misconfigured proxy, an accidental HTML response, or a future endpoint
+    that returns a browser-rendered payload.
+    """
+
+    def __init__(self, app, *, production: bool) -> None:
+        super().__init__(app)
+        self._production = production
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Block MIME-sniffing — browsers must honor the declared Content-Type.
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # Disallow framing — defense against clickjacking on any HTML response.
+        response.headers["X-Frame-Options"] = "DENY"
+        # Suppress the Referer header so internal URLs / session ids never
+        # leak to third parties via outbound links.
+        response.headers["Referrer-Policy"] = "no-referrer"
+        # Lock down resource loading for any HTML response. `default-src 'none'`
+        # plus `frame-ancestors 'none'` makes XSS payloads unable to load
+        # scripts, images, or iframes from this origin.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'"
+        )
+        # In production, force HTTPS for a year and include subdomains so a
+        # MITM cannot downgrade a returning client to plaintext.
+        if self._production:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
+
+
 def create_app() -> FastAPI:
     handler = logging.StreamHandler()
     handler.addFilter(RedactingFilter())
@@ -77,6 +114,10 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type"],
+    )
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        production=(settings.ENV == "production"),
     )
 
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

@@ -69,7 +69,7 @@ backend/
 
 ### Session & token security
 
-- Session cookie: `HttpOnly`, `SameSite=Lax` (survives the OAuth redirect chain), `Secure` in production. The browser holds only an opaque session ID.
+- Session cookie: `HttpOnly`, `SameSite=Strict`, `Secure` in production. The browser holds only an opaque session ID. (Lax would also work for the OAuth callback chain, but the assignment never relies on a cross-site GET hitting the backend — Strict eliminates that surface entirely.)
 - Access tokens are Fernet-encrypted (`app/core/crypto.py`). `TokenCipher` supports key rotation via a comma-separated `SESSION_SECRET` list — retired keys stay in the fallback list so live sessions survive a key rollover.
 - Redis state records use a short TTL (~5 min) for CSRF protection; session records use a longer TTL with sliding expiry and a **12-hour hard ceiling** enforced at read time.
 - `session_store.py` uses Lua scripts for atomic Redis operations (e.g., `pop_state` is GET+DEL in a single script to prevent state replay).

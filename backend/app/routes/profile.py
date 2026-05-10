@@ -24,11 +24,12 @@ router = APIRouter(tags=["profile"])
 async def get_or_fetch_user_profile(
     store: SessionStore,
     internal: InternalServiceClient,
+    provider: str,
     provider_user_id: str,
 ) -> UserProfileRecord:
-    profile_record = await store.get_user_profile(provider_user_id)
+    profile_record = await store.get_user_profile(provider, provider_user_id)
     if profile_record is None:
-        profile_record = await internal.get_user(provider_user_id)
+        profile_record = await internal.get_user(provider, provider_user_id)
         await store.set_user_profile(profile_record)
     return profile_record
 
@@ -47,6 +48,7 @@ async def get_profile(
     profile_record = await get_or_fetch_user_profile(
         store=store,
         internal=internal,
+        provider=session.provider,
         provider_user_id=session.provider_user_id,
     )
 
@@ -60,7 +62,7 @@ async def get_profile(
             id=session.provider_user_id,
             name=profile_record.user_name,
             provider=session.provider,
-            tier=profile_record.tier,
+            license=profile_record.license,
             role=profile_record.role,
         ),
         sections=sections,

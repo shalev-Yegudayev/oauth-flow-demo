@@ -1,116 +1,96 @@
 # OAuth Flow Demo
 
-A provider-agnostic OAuth microservice that authenticates a user against a third-party identity provider (GitHub, as the reference implementation), enriches the result with data from an internal service, and returns a single normalized profile to the client.
-
-Built as the Vorlon home assignment.
+Provider-agnostic OAuth microservice (Vorlon home assignment). Authenticates a user against a third-party provider (GitHub), enriches the result with a mock internal service, and returns a single normalized profile.
 
 ---
 
 ## Project Overview
 
-The service brokers the entire OAuth authorization-code flow on the server side. The browser never sees an access token: it holds only an opaque, `HttpOnly` session cookie. The backend exchanges the authorization code, encrypts the resulting tokens at rest in Redis, calls the third-party API on the user's behalf, and aggregates the response with a mock internal service before returning a unified DTO.
-
-The architecture is **provider-agnostic**: GitHub is the first concrete provider, but the OAuth lifecycle (authorize → callback → fetch → refresh → revoke) is defined as an abstract contract. Adding Google, Microsoft, or any OAuth 2.0 + PKCE provider is a matter of writing a new subclass and registering it — no route, session, or aggregation code changes.
-
-The `/profile` endpoint is the single source of truth for the client. It composes:
-
-1. **Provider data** — `GET /user`, `GET /user/repos`, etc. from GitHub.
-2. **Internal data** — a mock service returning a deterministic `tier` (Bronze / Silver / Gold) keyed by user id.
-
-The response is shaped by a Pydantic `UnifiedProfile` model so the frontend never deals with provider-specific payloads.
+- The backend brokers the full authorization-code flow; the browser only ever holds an opaque `HttpOnly` session cookie.
+- Tokens are encrypted at rest in Redis. The backend calls the provider API on the user's behalf.
+- `/profile` returns a unified DTO composed of **provider data** (GitHub `/user`, `/user/repos`) and **internal data** (mock service returning a deterministic `license` of `Pro` or `Basic`, plus a `role`).
+- Provider-agnostic by design: adding Google/Microsoft = new subclass + one registry entry. No route or session changes.
 
 ---
 
 ## Architecture & Design Patterns
 
-### Strategy Pattern — provider extensibility
+**Strategy pattern.** `OAuthProvider` (`backend/app/providers/base.py`) defines the lifecycle (`authorization_url`, `exchange_code`, `refresh_token`, `fetch_user_id`, `revoke_token`, `fetch_profile_sections`). `GithubProvider` is the reference implementation; routes resolve it via DI and never branch on provider type.
 
-`OAuthProvider` (`backend/app/providers/base.py`) is an abstract base class defining the full provider lifecycle:
+**Security.**
 
-- `authorization_url(state, code_challenge)`
-- `exchange_code(code, code_verifier)`
-- `refresh_token(refresh_token)`
-- `fetch_user_id(access_token)`
-- `revoke_token(access_token)`
-- `fetch_profile_sections(access_token)`
+| Concern         | Implementation                                                                  |
+| --------------- | ------------------------------------------------------------------------------- |
+| Token storage   | Fernet-encrypted at rest with key-rotation fallback list (`app/core/crypto.py`) |
+| Session cookie  | `HttpOnly`, `SameSite=Strict`, `Secure` in prod — opaque session id only        |
+| CSRF            | Per-flow `state` in Redis with short TTL, verified on callback                  |
+| OAuth hardening | PKCE S256 on the authorization-code flow                                        |
+| Race safety     | Lua scripts for atomic state/session writes; Redis lock around token refresh    |
+| Refresh ceiling | 12-hour hard cap regardless of refresh-token state                              |
+| Rate limiting   | `slowapi` on auth and profile routes                                            |
+| Secrets         | Pydantic `SecretStr` from `.env`; never logged                                  |
 
-`GithubProvider` is the reference concrete strategy. The `app/providers/__init__.py` registry maps a provider slug (`"github"`) to its strategy instance. Route handlers resolve the strategy via dependency injection (`get_provider`) and never branch on provider type. This isolates provider-specific quirks (PKCE handling, scope strings, response shapes) behind the abstract surface.
+**Session store.** Redis holds three typed records: `oauth:state:{id}` (CSRF + PKCE verifier, short TTL), `oauth:session:{id}` (encrypted tokens, sliding TTL), `oauth:user:{provider}:{user_id}` (cached internal profile, namespaced per provider). `app/services/session_store.py` is the only module that talks to Redis.
 
-### Security
+**Security headers.** A small middleware (`main.py`) attaches `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, and (in production) HSTS to every response.
 
-| Concern           | Implementation                                                                                                                                                                                              |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token storage     | Access and refresh tokens are **Fernet-encrypted at rest** in Redis (`app/core/crypto.py`). `TokenCipher` supports key rotation via a fallback list so live sessions survive a key rollover.                |
-| Session transport | `HttpOnly`, `SameSite=Lax`, `Secure` in production. The browser holds only an opaque session id.                                                                                                            |
-| CSRF              | Per-flow `state` parameter stored in Redis with a short TTL (~5 min) and verified on callback.                                                                                                              |
-| OAuth hardening   | **PKCE with S256** code challenge for the GitHub authorization-code flow.                                                                                                                                   |
-| Race safety       | Redis writes for state and session records use **Lua scripts** for atomic compare-and-set semantics. A Redis-based lock around token refresh prevents duplicate refresh attempts under concurrent requests. |
-| Refresh ceiling   | A 12-hour hard ceiling is enforced — past that, the session is treated as expired regardless of refresh-token state.                                                                                        |
-| Rate limiting     | `slowapi` limiter wired into auth and profile routes.                                                                                                                                                       |
-| Secrets           | All secrets are loaded via Pydantic `SecretStr` from `.env` (gitignored); none are logged.                                                                                                                  |
-
-### Session management
-
-Redis is the session store. Three record types live under typed keys:
-
-- `state:{id}` — short-TTL CSRF state and PKCE verifier.
-- `session:{id}` — encrypted tokens, provider id, sliding-expiry TTL.
-- `profile:{user_id}` — cached normalized profile.
-
-The session store layer (`app/services/session_store.py`) is the only module that talks to Redis directly; everything else goes through it.
+**Open-redirect guard.** `POST_LOGIN_REDIRECT` is validated at startup: it must be on the configured `FRONTEND_ORIGIN`, otherwise the app refuses to boot.
 
 ---
 
 ## Tech Stack
 
-| Layer         | Technology                                                     |
-| ------------- | -------------------------------------------------------------- |
-| Frontend      | React 19, Vite 8, JSX                                          |
-| Backend       | Python 3.11+, FastAPI, Pydantic v2, `httpx` (async), `slowapi` |
-| Session store | Redis 7                                                        |
-| Crypto        | `cryptography` (Fernet / AES-128-CBC + HMAC-SHA256)            |
-| Tests         | `pytest`, `pytest-asyncio`, `respx`                            |
-| Container     | Docker / Docker Compose (full stack)                           |
+| Layer         | Technology                                             |
+| ------------- | ------------------------------------------------------ |
+| Frontend      | React 19, Vite, TypeScript, Tailwind, TanStack Query   |
+| Backend       | Python 3.11+, FastAPI, Pydantic v2, `httpx`, `slowapi` |
+| Session store | Redis 7                                                |
+| Crypto        | `cryptography` (Fernet)                                |
+| Tests         | `pytest`, `pytest-asyncio`, `respx`                    |
+| Container     | Docker / Docker Compose                                |
 
 ---
 
 ## Setup & Installation
 
-### Prerequisites
-
-- A GitHub OAuth App (Settings → Developer settings → OAuth Apps)
-  - **Authorization callback URL**: `http://localhost:8000/auth/github/callback`
-- Docker (required for both options below)
-- Python 3.11+ and Node.js 20+ (Option B only)
+Two ways to run the project — choose the one that fits your goal.
 
 ---
 
-### Option A — Full stack via Docker Compose (recommended)
+### Option 1 — Docker Compose (recommended for local evaluation)
+
+Runs the full stack (frontend, backend, Redis) in isolated containers with a single command.
+
+**Prerequisites:** Docker
 
 ```powershell
-# 1. Copy and fill in secrets
-copy backend\.env.example backend\.env   # fill in the values listed below
+# 1. Copy the environment template and fill in your secrets
+copy backend\.env.example backend\.env
 
-# 2. Build images and start all three services
+# 2. Build images and start all services
 docker compose up --build
 ```
 
-| Service  | URL                      |
-| -------- | ------------------------ |
-| Frontend | http://localhost:5174    |
-| Backend  | http://localhost:8000    |
-| Redis    | localhost:6379 (internal)|
+| Service  | URL                       |
+| -------- | ------------------------- |
+| Frontend | http://localhost:5174     |
+| Backend  | http://localhost:8000     |
+| Redis    | localhost:6379 (internal) |
 
-To stop: `docker compose down` (add `-v` to also wipe the Redis volume).
+To stop: `docker compose down` (add `-v` to also remove the Redis volume).
 
 ---
 
-### Option B — Local development
+### Option 2 — Local development
 
-#### 1. Start Redis
+Runs each service on the host for the fastest iteration cycle. Requires a Redis container for the session store.
+
+**Prerequisites:** Docker, Python 3.11+, Node.js 20+
+
+#### 1. Redis
 
 ```bash
-docker compose up -d redis
+docker run -d --name oauth-redis -p 6379:6379 redis:7-alpine
 ```
 
 #### 2. Backend
@@ -120,7 +100,7 @@ cd backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env   # then fill in the values below
+copy .env.example .env   # fill in the values listed below
 uvicorn main:app --reload
 ```
 
@@ -136,7 +116,7 @@ npm run dev
 
 Frontend runs on `http://localhost:5173`.
 
-> **Note:** when running locally, `FRONTEND_ORIGIN` and `POST_LOGIN_REDIRECT` in `backend/.env` must point to `http://localhost:5173`, not `5174`.
+> **Note:** when using Option 2, ensure `FRONTEND_ORIGIN` and `POST_LOGIN_REDIRECT` in `backend/.env` are set to `http://localhost:5173` (not `5174`).
 
 ### Environment variables (`backend/.env`)
 
@@ -155,86 +135,47 @@ Frontend runs on `http://localhost:5173`.
 | `ENV`                   | `dev` or `prod`                                                                                                                                    |
 | `SESSION_TTL_SECONDS`   | Session sliding expiry (default `3600`)                                                                                                            |
 | `STATE_TTL_SECONDS`     | OAuth state TTL (default `300`)                                                                                                                    |
+| `USER_PROFILE_TTL_SECONDS` | Internal-service profile cache TTL (default `3600`)                                                                                             |
 
 ---
 
 ## API Documentation
 
-All endpoints are mounted at the backend root (`http://localhost:8000`).
+All endpoints live under `http://localhost:8000`.
 
-### `GET /auth/{provider}`
+| Method   | Path                        | Auth           | Description                                                                                                                                |
+| -------- | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/auth/{provider}`          | —              | Generates `state` + PKCE verifier, 302 to provider authorization URL.                                                                      |
+| `GET`    | `/auth/{provider}/callback` | —              | Validates `state`, exchanges code, encrypts tokens, sets session cookie, 302 to `POST_LOGIN_REDIRECT`.                                     |
+| `POST`   | `/auth/logout`              | session cookie | Deletes the local session and clears the cookie. The provider-side token is left alive (use `DELETE /auth/account` to revoke it). `204`.   |
+| `DELETE` | `/auth/account`             | session cookie | Revokes the access token at the provider, deletes the session, clears the cookie. Revocation failures are logged but do not block. `204`.  |
+| `GET`    | `/profile`                  | session cookie | Returns `UnifiedProfile` (user, repos, `license`). Refreshes the token transparently if needed. `401` if expired past the refresh ceiling. |
 
-Initiates the OAuth flow. Generates `state` + PKCE `code_verifier`, stores them in Redis, and **302-redirects** the browser to the provider's authorization URL.
-
-- Path params: `provider` — currently `github`.
-- Response: `302 Found` with `Location: <provider authorization url>`.
-
-### `GET /auth/{provider}/callback`
-
-The provider redirects here with `?code=…&state=…`. The backend:
-
-1. Validates `state` against the Redis record.
-2. Exchanges the code for tokens (with PKCE verifier).
-3. Encrypts the tokens and writes a session record.
-4. Sets the session cookie (`HttpOnly`, `SameSite=Lax`).
-5. **302-redirects** to `POST_LOGIN_REDIRECT`.
-
-Errors return a structured JSON body via the `OAuthError` / `ProviderError` handlers.
-
-### `GET /profile`
-
-Returns the unified profile for the current session. Requires the session cookie.
-
-- Auth: session cookie.
-- Response: `200 OK` with a `UnifiedProfile` JSON body — user summary, repos (from GitHub), and `tier` (from the internal service).
-- Errors: `401` if the cookie is missing or the session has expired past the refresh ceiling.
-
-A token refresh — if needed — happens transparently inside this handler; the client does not see it.
+Errors are returned as structured JSON via the `OAuthError` / `ProviderError` handlers.
 
 ---
 
 ## Claude Code Sessions (public)
 
-Public Claude Code session links recorded during the build:
+Public session artifacts recorded during the build, in chronological order:
 
-- Overall setup and backend design — _(paste session URL)_
-- Backend Implementation — `https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA`
-- Frontend Implementation — `https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf`
-- Backend CR and Security analysis - `https://claude.ai/code/session_01BRnpXzz4Pu4BeLRGnUwNZy`
+| # | Phase | Link |
+| - | --- | --- |
+| 1 | Setup & backend design | [docs/Vorlon home assignment phase one - setup.md](docs/Vorlon%20home%20assignment%20phase%20one%20-%20setup.md) |
+| 2 | Backend implementation | https://claude.ai/code/session_019DhvbjSBnmh1aVzXKS7xhA |
+| 3 | Frontend implementation | https://claude.ai/code/session_019wymAUK6rh2yk5gFmHqLDf |
+| 4 | Backend CR & security analysis | https://claude.ai/code/session_01BRnpXzz4Pu4BeLRGnUwNZy |
 
-These cover the analysis, backend planning, and implementation phases.
+Together these cover the analysis, planning, implementation, and review phases.
 
 ---
 
 ## What I Would Add With More Time
 
-### Features
+**Features.** Second provider (Google/Microsoft) to exercise the strategy abstraction; real internal service with contract tests; active-session management UI backed by a `sessions:{user_id}` index; multi-provider account linking; revocation webhooks.
 
-- **Second provider implementation** (Google or Microsoft) to exercise the strategy abstraction beyond a single concrete case and surface any leaky assumptions in the base class.
-- **Real internal service** instead of the in-process mock transport, plus a small contract test suite so the aggregation layer is verified against an actual HTTP boundary.
-- **Token revocation on logout** wired through to the provider, not just local session deletion.
-- **Active session management UI** — let users see all live sessions (device, IP, last-used timestamp) and revoke individual ones, backed by a `sessions:{user_id}` index in Redis.
-- **Multi-provider concurrent sessions** — allow a user to link GitHub, Google, and Microsoft accounts under a single identity, with a merge/conflict resolution strategy for duplicate emails.
-- **Provider-side revocation webhooks** — GitHub (and Google) can push a notification when a token is revoked externally; the backend should listen and immediately invalidate the corresponding session.
+**Security.** Refresh-token rotation with replay detection; mTLS or signed JWTs for the internal service instead of a static API key; suspicious-session detection (IP/UA/geo changes); automated `SESSION_SECRET` rotation pipeline.
 
-### Security
+**Observability.** Structured JSON logs with per-request correlation ids; OpenTelemetry traces across the full flow; per-provider Prometheus metrics (refresh success, callback p95, error rates); append-only audit log; hardened prod Redis (ACLs, TLS, secret manager).
 
-- **Refresh token rotation** — issue a new refresh token on every use and invalidate the previous one. A replayed old refresh token signals a possible token theft and should trigger session teardown.
-- **HTTPS / TLS in production** — TLS termination at the load balancer or reverse proxy, `Secure` cookie flag enforced by `ENV=prod`, and HSTS headers (`Strict-Transport-Security`).
-- **mTLS or signed JWTs for the internal service** — replace the plain `INTERNAL_API_KEY` header with mutual TLS or short-lived JWTs so the internal service can verify the caller's identity, not just a static secret.
-- **Suspicious-session detection** — flag (and optionally invalidate) sessions where the IP or user-agent changes mid-session, or where a token refresh is attempted from an unexpected geo-region.
-- **Secrets rotation pipeline** — automate `SESSION_SECRET` rotation end-to-end: provision a new key, add it to the Fernet fallback list, re-encrypt live sessions in a background job, then retire the old key. Currently this is documented but not automated.
-
-### Observability & Operations
-
-- **Structured JSON logging** with a correlation id per request, and redacted sensitive fields.
-- **OpenTelemetry traces** across the full OAuth flow (authorize → callback → profile fetch → internal service call).
-- **Per-provider metrics**: token-refresh success rate, callback latency p95, 4xx/5xx rates — exported to Prometheus / Grafana.
-- **Audit log** of all auth events (login, refresh, revoke, failure) written to a separate append-only stream (Redis Streams or a dedicated table).
-- **Production session store hardening**: Redis ACLs, TLS, a dedicated logical DB, and secrets sourced from a secret manager (AWS Secrets Manager / Vault) rather than `.env`.
-
-### Developer Experience
-
-- **CI pipeline** (GitHub Actions) running lint, type-check (`mypy --strict`), unit tests, and a docker-compose-based integration test job on every PR.
-- **End-to-end tests with Playwright** driving the full redirect chain in a headless browser, including negative paths (state mismatch, expired refresh token, revoked grant).
-- **Frontend polish**: TypeScript migration so the `UnifiedProfile` shape is shared end-to-end, a real design system (shadcn/ui or Radix), and proper loading / error states.
+**DX.** GitHub Actions CI (lint, `mypy --strict`, tests, compose-based integration job); Playwright E2E covering negative paths; a real design system (shadcn/Radix) and frontend test coverage (Vitest + RTL).

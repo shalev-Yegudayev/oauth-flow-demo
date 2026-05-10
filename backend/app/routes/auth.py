@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
 from app.core.crypto import TokenCipher
+from app.core.exceptions import OAuthError
 from app.core.rate_limit import limiter
 from app.core.security import (
     clear_session_cookie,
@@ -161,7 +162,7 @@ async def delete_account(
             plaintext = cipher.decrypt(session.encrypted_access_token)
             provider = get_provider(session.provider, provider_http, settings)
             await provider.revoke_token(plaintext)
-        except Exception as exc:
+        except (httpx.HTTPError, OAuthError) as exc:
             logger.warning(
                 "token revocation failed session_id=%s reason=%s",
                 session_id,

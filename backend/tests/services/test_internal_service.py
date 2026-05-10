@@ -43,37 +43,41 @@ def internal_client(test_settings):
 
 class TestMockDeterminism:
     async def test_same_user_id_always_returns_same_name(self, internal_client):
-        r1 = await internal_client.get_user("12345")
-        r2 = await internal_client.get_user("12345")
+        r1 = await internal_client.get_user("github", "12345")
+        r2 = await internal_client.get_user("github", "12345")
         assert r1.user_name == r2.user_name
 
-    async def test_same_user_id_always_returns_same_tier(self, internal_client):
-        r1 = await internal_client.get_user("99999")
-        r2 = await internal_client.get_user("99999")
-        assert r1.tier == r2.tier
+    async def test_same_user_id_always_returns_same_license(self, internal_client):
+        r1 = await internal_client.get_user("github", "99999")
+        r2 = await internal_client.get_user("github", "99999")
+        assert r1.license == r2.license
 
     async def test_same_user_id_always_returns_same_role(self, internal_client):
-        r1 = await internal_client.get_user("abc123")
-        r2 = await internal_client.get_user("abc123")
+        r1 = await internal_client.get_user("github", "abc123")
+        r2 = await internal_client.get_user("github", "abc123")
         assert r1.role == r2.role
 
     async def test_different_user_ids_may_differ(self, internal_client):
         """Not guaranteed to differ but the seed changes — just check no crash."""
-        r1 = await internal_client.get_user("user-alpha")
-        r2 = await internal_client.get_user("user-beta")
+        r1 = await internal_client.get_user("github", "user-alpha")
+        r2 = await internal_client.get_user("github", "user-beta")
         assert r1.provider_user_id == "user-alpha"
         assert r2.provider_user_id == "user-beta"
 
     async def test_provider_user_id_echoed(self, internal_client):
-        result = await internal_client.get_user("my-uid")
+        result = await internal_client.get_user("github", "my-uid")
         assert result.provider_user_id == "my-uid"
 
-    async def test_tier_is_valid_literal(self, internal_client):
-        result = await internal_client.get_user("12345")
-        assert result.tier in ("Pro", "Basic")
+    async def test_provider_field_set(self, internal_client):
+        result = await internal_client.get_user("github", "my-uid")
+        assert result.provider == "github"
+
+    async def test_license_is_valid_literal(self, internal_client):
+        result = await internal_client.get_user("github", "12345")
+        assert result.license in ("Pro", "Basic")
 
     async def test_role_is_valid_value(self, internal_client):
-        result = await internal_client.get_user("12345")
+        result = await internal_client.get_user("github", "12345")
         assert result.role in ("developer", "admin", "analyst", "viewer")
 
 
@@ -95,11 +99,11 @@ class TestApiKeyValidation:
         client = InternalServiceClient(http=http, settings=bad_settings)
 
         with pytest.raises(InternalServiceError) as exc_info:
-            await client.get_user("12345")
+            await client.get_user("github", "12345")
         assert exc_info.value.upstream_status == 401
 
     async def test_correct_api_key_succeeds(self, internal_client):
-        result = await internal_client.get_user("12345")
+        result = await internal_client.get_user("github", "12345")
         assert result is not None
 
 
@@ -120,7 +124,7 @@ class TestNetworkErrors:
         client = InternalServiceClient(http=http, settings=test_settings)
 
         with pytest.raises(InternalServiceError) as exc_info:
-            await client.get_user("12345")
+            await client.get_user("github", "12345")
         assert exc_info.value.upstream_status == 503
 
     async def test_non_200_status_raises_internal_service_error(self, test_settings):
@@ -134,7 +138,7 @@ class TestNetworkErrors:
         client = InternalServiceClient(http=http, settings=test_settings)
 
         with pytest.raises(InternalServiceError) as exc_info:
-            await client.get_user("12345")
+            await client.get_user("github", "12345")
         assert exc_info.value.upstream_status == 500
 
     async def test_invalid_json_body_raises_502(self, test_settings):
@@ -152,5 +156,5 @@ class TestNetworkErrors:
         client = InternalServiceClient(http=http, settings=test_settings)
 
         with pytest.raises(InternalServiceError) as exc_info:
-            await client.get_user("12345")
+            await client.get_user("github", "12345")
         assert exc_info.value.upstream_status == 502

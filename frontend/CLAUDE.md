@@ -18,17 +18,14 @@ npm run lint     # ESLint
 
 ## Stack
 
-- **React 19** (JSX, not TSX — no TypeScript configured yet)
-- **Vite 8** with `@vitejs/plugin-react` (Babel transform)
+- **React 19** with **TypeScript** (`.tsx`)
+- **Vite** with `@vitejs/plugin-react`
+- **TanStack Query** for server state, **Zod** for response validation, **Tailwind** for styling
 - **ESLint** with `eslint-plugin-react-hooks` and `eslint-plugin-react-refresh`
 
 ## Implementation status
 
-`src/App.jsx` is currently the Vite starter template. The OAuth UI needs to be built. Planned interaction surface:
-
-1. "Login with GitHub" button → `GET http://localhost:8000/auth/github` (triggers redirect chain)
-2. After redirect back, `GET http://localhost:8000/profile` to fetch the normalized profile
-3. Display repos and tier from the profile response
+The OAuth UI is in place: `LoginPage` triggers the backend redirect chain, `ProfilePage` (guarded by `AuthGuard`) renders the unified profile from `GET /profile`, and provider-specific sections render through a discriminated `provider` field. Logout and account-deletion buttons live on the profile header.
 
 ## API communication rules
 
