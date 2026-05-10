@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.crypto import TokenCipher
 from app.core.exceptions import OAuthError
 from app.core.handlers import oauth_error_handler, unhandled_error_handler
-from app.core.rate_limit import get_session_key, limiter as _route_limiter
+from app.core.rate_limit import get_session_key
 from app.core.security import RedactingFilter
 from app.routes.auth import router as auth_router
 from app.routes.profile import router as profile_router

@@ -11,7 +11,6 @@ from urllib.parse import parse_qs, urlparse
 
 from app.models.session import StateRecord
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

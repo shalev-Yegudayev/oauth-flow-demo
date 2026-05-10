@@ -15,7 +15,6 @@ import pytest
 from app.core.exceptions import InternalServiceError
 from app.services.internal_service import InternalServiceClient, mock_transport_handler
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

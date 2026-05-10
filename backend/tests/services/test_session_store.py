@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 
 from app.models.session import UserProfileRecord
 
-
 # ---------------------------------------------------------------------------
 # State record tests
 # ---------------------------------------------------------------------------

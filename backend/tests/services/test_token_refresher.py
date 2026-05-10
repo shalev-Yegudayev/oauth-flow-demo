@@ -17,10 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.core.crypto import TokenCipher
 from app.core.exceptions import TokenRefreshError
 from app.providers.base import AccessToken
-from app.services.session_store import SessionStore
 from app.services.token_refresher import _LOCK_TTL, TokenRefresher
 
 _NOW = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)

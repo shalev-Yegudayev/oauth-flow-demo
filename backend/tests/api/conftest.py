@@ -15,7 +15,6 @@ import pytest
 import respx
 from httpx import ASGITransport, AsyncClient
 
-
 # ---------------------------------------------------------------------------
 # Isolated Redis per test
 # ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ from fastapi import HTTPException
 from app.core.crypto import InvalidToken, TokenCipher
 from app.core.exceptions import TokenRefreshError
 from app.models.session import SessionRecord
-from app.services.session_store import SessionStore
 from app.providers.base import OAuthProvider
+from app.services.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class TokenRefresher:
                 self._provider.refresh_token(plaintext_refresh),
                 timeout=8.0,
             )
-        except (asyncio.TimeoutError, httpx.RequestError, TokenRefreshError) as exc:
+        except (TimeoutError, httpx.RequestError, TokenRefreshError) as exc:
             await self._store.delete_session(record.session_id)
             raise TokenRefreshError("refresh_failed") from exc
 
