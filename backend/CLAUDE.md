@@ -32,11 +32,11 @@ Tests are self-contained — no `.env` or running Redis needed. `tests/conftest.
 
 **Test layers and key fixtures:**
 
-| Layer | Path | Notes |
-|---|---|---|
-| Unit | `tests/unit/` | Pure logic; uses `cipher`, `make_state_record`, `make_session_record` from root conftest |
-| Services | `tests/services/` | Uses `session_store` and `fake_redis` fixtures (fakeredis, no HTTP) |
-| API | `tests/api/` | Full request/response; `client` is unauthenticated, `authed_client` has a seeded session cookie |
+| Layer    | Path              | Notes                                                                                           |
+| -------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| Unit     | `tests/unit/`     | Pure logic; uses `cipher`, `make_state_record`, `make_session_record` from root conftest        |
+| Services | `tests/services/` | Uses `session_store` and `fake_redis` fixtures (fakeredis, no HTTP)                             |
+| API      | `tests/api/`      | Full request/response; `client` is unauthenticated, `authed_client` has a seeded session cookie |
 
 `github_mock` (autouse in `tests/api/`) blocks all `httpx` calls — register only the routes a test needs via `respx`.
 
@@ -69,7 +69,7 @@ backend/
 
 ### Session & token security
 
-- Session cookie: `HttpOnly`, `SameSite=Strict`, `Secure` in production. The browser holds only an opaque session ID. (Lax would also work for the OAuth callback chain, but the assignment never relies on a cross-site GET hitting the backend — Strict eliminates that surface entirely.)
+- Session cookie: `HttpOnly`, environment-aware SameSite. In dev → `SameSite=Lax` (handles localhost reliably and the OAuth redirect chain).
 - Access tokens are Fernet-encrypted (`app/core/crypto.py`). `TokenCipher` supports key rotation via a comma-separated `SESSION_SECRET` list — retired keys stay in the fallback list so live sessions survive a key rollover.
 - Redis state records use a short TTL (~5 min) for CSRF protection; session records use a longer TTL with sliding expiry and a **12-hour hard ceiling** enforced at read time.
 - `session_store.py` uses Lua scripts for atomic Redis operations (e.g., `pop_state` is GET+DEL in a single script to prevent state replay).
@@ -105,10 +105,10 @@ GitHub uses **PKCE with S256**; `app/core/security.py` generates the code verifi
 
 ## Endpoints
 
-| Method | Path | Rate limit | Description |
-|---|---|---|---|
-| GET | `/auth/{provider}` | 10/min | Redirect to provider authorization URL |
-| GET | `/auth/{provider}/callback` | 20/min | Exchange code, create session, set cookie |
-| POST | `/auth/logout` | 30/min | Delete session, clear cookie (token stays alive on provider) |
-| DELETE | `/auth/account` | 10/min | Revoke token, delete session, clear cookie |
-| GET | `/profile` | 60/min | Return normalized profile (requires session cookie) |
+| Method | Path                        | Rate limit | Description                                                  |
+| ------ | --------------------------- | ---------- | ------------------------------------------------------------ |
+| GET    | `/auth/{provider}`          | 10/min     | Redirect to provider authorization URL                       |
+| GET    | `/auth/{provider}/callback` | 20/min     | Exchange code, create session, set cookie                    |
+| POST   | `/auth/logout`              | 30/min     | Delete session, clear cookie (token stays alive on provider) |
+| DELETE | `/auth/account`             | 10/min     | Revoke token, delete session, clear cookie                   |
+| GET    | `/profile`                  | 60/min     | Return normalized profile (requires session cookie)          |

@@ -22,7 +22,7 @@ Provider-agnostic OAuth microservice (Vorlon home assignment). Authenticates a u
 | Concern         | Implementation                                                                  |
 | --------------- | ------------------------------------------------------------------------------- |
 | Token storage   | Fernet-encrypted at rest with key-rotation fallback list (`app/core/crypto.py`) |
-| Session cookie  | `HttpOnly`, `SameSite=Strict`, `Secure` in prod — opaque session id only        |
+| Session cookie  | `HttpOnly`; `SameSite=Lax` in dev, `SameSite=None; Secure` in prod (cross-site deploy) |
 | CSRF            | Per-flow `state` in Redis with short TTL, verified on callback                  |
 | OAuth hardening | PKCE S256 on the authorization-code flow                                        |
 | Race safety     | Lua scripts for atomic state/session writes; Redis lock around token refresh    |

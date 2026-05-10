@@ -4,10 +4,7 @@ import logging
 import os
 import re
 
-from fastapi import Response
-
-from config import Settings
-
+# Redact credential-shaped keywords from logs (case-insensitive)
 REDACT_RE = re.compile(
     r"(?i)(token|secret|authorization|api[-_]?key|code_verifier|refresh)"
 )
@@ -43,7 +40,7 @@ def set_session_cookie(response: Response, session_id: str, settings: Settings) 
         max_age=settings.SESSION_TTL_SECONDS,
         httponly=True,
         secure=(settings.ENV == "production"),
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
@@ -55,6 +52,6 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
         max_age=0,
         httponly=True,
         secure=(settings.ENV == "production"),
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
