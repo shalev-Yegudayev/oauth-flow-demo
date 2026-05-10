@@ -4,7 +4,6 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
-import httpx
 import redis.asyncio as aioredis
 from fastapi import HTTPException
 
