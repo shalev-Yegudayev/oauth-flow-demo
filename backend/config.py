@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     SESSION_SECRET: SecretStr
     FRONTEND_ORIGIN: str
     POST_LOGIN_REDIRECT: str
-    ENV: Literal["dev", "prod"] = "dev"
+    ENV: Literal["dev", "production"] = "dev"
     SESSION_TTL_SECONDS: int = 3600
     STATE_TTL_SECONDS: int = 300
     USER_PROFILE_TTL_SECONDS: int = 3600

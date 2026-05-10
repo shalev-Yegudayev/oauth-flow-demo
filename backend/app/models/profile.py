@@ -1,6 +1,8 @@
-from typing import Any, Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel
+
+T = TypeVar("T")
 
 
 class UserSummary(BaseModel):
@@ -11,6 +13,6 @@ class UserSummary(BaseModel):
     role: str
 
 
-class UnifiedProfile(BaseModel):
+class UnifiedProfile(BaseModel, Generic[T]):
     user: UserSummary
-    sections: dict[str, Any]
+    sections: dict[str, T]
