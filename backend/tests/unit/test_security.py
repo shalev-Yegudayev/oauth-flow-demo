@@ -135,7 +135,7 @@ class TestSetSessionCookie:
         from config import Settings
 
         prod_settings = Settings.model_validate(
-            {**test_settings.model_dump(), "ENV": "prod"}
+            {**test_settings.model_dump(), "ENV": "production"}
         )
         resp = Response()
         set_session_cookie(resp, "sess-xyz", prod_settings)

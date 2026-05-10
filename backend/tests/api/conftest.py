@@ -60,11 +60,8 @@ async def test_app(api_redis, test_settings, cipher, monkeypatch):
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
 
-    from app.core.exceptions import (
-        OAuthError,
-        oauth_error_handler,
-        unhandled_error_handler,
-    )
+    from app.core.exceptions import OAuthError
+    from app.core.handlers import oauth_error_handler, unhandled_error_handler
     from app.core.rate_limit import limiter as _route_limiter
     from app.routes.auth import router as auth_router
     from app.routes.profile import router as profile_router
