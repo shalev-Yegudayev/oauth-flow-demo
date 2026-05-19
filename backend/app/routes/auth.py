@@ -49,19 +49,27 @@ async def start_oauth(
     provider: str,
     store: SessionStore = Depends(get_session_store),
     oauth_provider: OAuthProvider = Depends(get_oauth_provider),
+    settings: Settings = Depends(get_settings_dep),
 ) -> RedirectResponse:
     state = generate_state()
     verifier = generate_code_verifier()
     challenge = compute_code_challenge(verifier)
 
-    await store.put_state(
-        state,
-        StateRecord(
-            provider=provider,
-            code_verifier=verifier,
-            created_at=datetime.now(UTC),
-        ),
-    )
+    try:
+        await store.put_state(
+            state,
+            StateRecord(
+                provider=provider,
+                code_verifier=verifier,
+                created_at=datetime.now(UTC),
+            ),
+        )
+    except Exception as exc:  # Added after subbmission
+        logger.exception(
+            "failed to store OAuth state provider=%s reason=%s", provider, exc
+        )
+        return _login_redirect(settings.FRONTEND_ORIGIN, "session_error")
+
     return RedirectResponse(
         url=oauth_provider.authorization_url(state, challenge),
         status_code=307,
@@ -92,13 +100,21 @@ async def oauth_callback(
     if state_record.provider != provider:
         return _login_redirect(settings.FRONTEND_ORIGIN, "provider_mismatch")
 
-    token = await oauth_provider.exchange_code(code, state_record.code_verifier)
+    try:
+        token = await oauth_provider.exchange_code(code, state_record.code_verifier)
+    except (OAuthError, httpx.HTTPError) as exc:  # Added after subbmission
+        logger.warning("token exchange failed provider=%s reason=%s", provider, exc)
+        return _login_redirect(settings.FRONTEND_ORIGIN, "token_exchange_failed")
 
     granted = set(token.scope.split())
     if not set(oauth_provider.required_scopes).issubset(granted):
         return _login_redirect(settings.FRONTEND_ORIGIN, "insufficient_scope")
 
-    user_id = await oauth_provider.fetch_user_id(token.value)
+    try:
+        user_id = await oauth_provider.fetch_user_id(token.value)
+    except (OAuthError, httpx.HTTPError) as exc:  # Added after subbmission
+        logger.warning("fetch_user_id failed provider=%s reason=%s", provider, exc)
+        return _login_redirect(settings.FRONTEND_ORIGIN, "provider_unreachable")
 
     session_id = generate_session_id()
     session = SessionRecord(
@@ -114,7 +130,11 @@ async def oauth_callback(
         created_at=datetime.now(UTC),
         last_refreshed_at=None,
     )
-    await store.create_session(session)
+    try:
+        await store.create_session(session)
+    except Exception as exc:
+        logger.exception("session creation failed provider=%s reason=%s", provider, exc)
+        return _login_redirect(settings.FRONTEND_ORIGIN, "session_error")
 
     response = RedirectResponse(url=settings.POST_LOGIN_REDIRECT, status_code=307)
     set_session_cookie(response, session_id, settings)
