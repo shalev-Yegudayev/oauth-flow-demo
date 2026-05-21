@@ -189,7 +189,8 @@ Together these cover the analysis, planning, implementation, and review phases.
 **Security**
 
 - Explicit redirect URI validation — store the provider's expected `redirect_uri` in the state record; validate on callback that the incoming parameter matches, preventing accidental misconfiguration
-- Refresh-token rotation with replay detection
+- Provider token revocation on logout — call GitHub's token-revocation endpoint when a session ends so the access token dies with the session, not just the local session record
+- Migration to a GitHub App with fine-grained, expiring user tokens — replaces the classic OAuth App's non-expiring tokens with short-lived access tokens plus refresh tokens, activating the existing `TokenRefresher` flow
 - mTLS or signed JWTs for the internal service (instead of a static API key)
 - Suspicious-session detection (IP/UA/geo changes)
 - Automated `SESSION_SECRET` rotation pipeline
